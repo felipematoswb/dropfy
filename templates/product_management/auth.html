@@ -1,0 +1,6 @@
+<!-- templates/product_management/auth.html -->
+<form action="{% url 'shopify_auth' %}" method="post">
+    {% csrf_token %}
+    <input type="text" name="shop" placeholder="your-shop-name.myshopify.com">
+    <button type="submit">Authenticate</button>
+</form>
