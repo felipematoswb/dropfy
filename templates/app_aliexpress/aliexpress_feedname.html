@@ -1,0 +1,95 @@
+{% extends 'base.html' %} {% block content %}
+<div class="jumbotron jumbotron-fluid bg-light">
+  <div class="container">
+    <h1 class="display-4">Feedname</h1>
+    <p class="lead">
+      Manage your promotions and track the number of products in each one.
+    </p>
+    <hr class="my-4" />
+
+    <!-- Mensagem de Erro -->
+    {% if error %}
+    <div class="alert alert-danger" role="alert">
+      <i class="fas fa-exclamation-circle"></i> {{ error }}
+    </div>
+    {% endif %}
+
+    <!-- Botão de Atualização -->
+    <div class="mb-4">
+      <form method="POST" action="{% url 'feedname_aliexpress' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-warning">
+          <i class="fas fa-sync-alt"></i> Update Feed
+        </button>
+      </form>
+    </div>
+
+    <!-- Tabela de Promos -->
+    <div class="table-responsive">
+      <table class="table table-hover">
+        <thead class="table-light">
+          <tr>
+            <th>Promo Name</th>
+            <th>Number of Products</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for promo in page_obj %}
+          <tr>
+            <td class="bg-light">{{ promo.promo_name }}</td>
+            <td class="bg-light">{{ promo.product_num }}</td>
+            <td class="bg-light">
+              <a href="{% url 'recommend_feed_aliexpress' promo.promo_name|urlencode %}" class="btn btn-primary">
+                <i class="fas fa-folder-open"></i> Open
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Paginação -->
+    <nav class="mt-4">
+      <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+          <a class="page-link" href="?page=1" aria-label="First">
+            <span aria-hidden="true">&laquo;&laquo;</span>
+          </a>
+        </li>
+        <li class="page-item">
+          <a class="page-link" href="?page={{ page_obj.previous_page_number }}" aria-label="Previous">
+            <span aria-hidden="true">&laquo;</span>
+          </a>
+        </li>
+        {% endif %}
+
+        <li class="page-item disabled">
+          <span class="page-link">
+            Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}.
+          </span>
+        </li>
+
+        {% if page_obj.has_next %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ page_obj.next_page_number }}" aria-label="Next">
+            <span aria-hidden="true">&raquo;</span>
+          </a>
+        </li>
+        <li class="page-item">
+          <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}" aria-label="Last">
+            <span aria-hidden="true">&raquo;&raquo;</span>
+          </a>
+        </li>
+        {% endif %}
+      </ul>
+    </nav>
+  </div>
+</div>
+
+<!-- Adicionar Font Awesome para Ícones -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
+
+{% endblock content %}

@@ -1,0 +1,42 @@
+/* Exemplo de estilos personalizados */
+.jumbotron {
+  padding: 2rem 1rem;
+  margin-bottom: 2rem;
+  border-radius: 0.3rem;
+}
+
+.card {
+  margin-bottom: 1rem;
+}
+
+footer {
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+}
+
+.container {
+  width: 100%;
+  max-width: 1600px;
+  /* Ajuste conforme necessário */
+  margin: 0 auto;
+  /* Centraliza o container */
+  padding: 0 15px;
+  /* Adiciona um padding interno */
+}
+
+.product-description img {
+  max-width: 100% !important;
+  /* Força a largura máxima */
+  height: auto !important;
+  /* Mantém a proporção */
+  display: block;
+  /* Remove espaços extras */
+  margin: 10px 0;
+  /* Adiciona margem */
+}
+
+.product-description div {
+  max-width: 100% !important;
+  /* Garante que o contêiner da imagem também respeite o limite */
+}
