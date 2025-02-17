@@ -3,7 +3,7 @@
 {% block content %}
 <div class="jumbotron jumbotron-fluid bg-light">
   <div class="container">
-    <h1 class="display-4">{{ product.ae_item_base_info_dto.subject }}</h1>
+    <h2 class="display-5">{{ product.ae_item_base_info_dto.subject }}</h2>
     <p class="lead">
       Complete details of the product and its variations.
     </p>
@@ -98,63 +98,66 @@
         </ul>
 
         <!-- Variações do Produto (SKUs) -->
-        <div class="mt-4 bg-white p-4 rounded shadow-sm">
-          <h2 class="h4">Variações do Produto</h2>
-          <div class="table-responsive">
-            <table class="table table-hover">
-              <thead class="table-light">
-                <tr>
-                  <th>Cor</th>
-                  <th>Tamanho</th>
-                  <th>Preço (BRL)</th>
-                  <th>Estoque</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for sku in product.ae_item_sku_info_dtos.ae_item_sku_info_d_t_o %}
-                <tr>
-                  <td>
-                    {% for prop in sku.ae_sku_property_dtos.ae_sku_property_d_t_o %}
-                    {{ prop.property_value_definition_name }}
-                    {% endfor %}
-                  </td>
-                  <td>
-                    {% for prop in sku.ae_sku_property_dtos.ae_sku_property_d_t_o %}
-                    {% if prop.sku_property_name == 'Shoe Size' %}
-                    {{ prop.sku_property_value }}
-                    {% endif %}
-                    {% endfor %}
-                  </td>
-                  <td>{{ sku.offer_sale_price }}</td>
-                  <td>{{ sku.sku_available_stock }}</td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
+        <br>
+        <h2 class="h4">Variações do Produto</h2>
+        <div class="table-responsive">
+          <table class="table table-hover">
+            <thead class="table-white">
+              <tr>
+                <th>Imagem</th>
+                <th>Tipo</th>
+                <th>Estilo</th>
+                <th>Preço (BRL)</th>
+                <th>Estoque</th>
+                <th>SKU</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for sku in product.ae_item_sku_info_dtos.ae_item_sku_info_d_t_o %}
+              <tr>
+                <td>
+                  {% for prop in sku.ae_sku_property_dtos.ae_sku_property_d_t_o %}
+                  <img src="{{ prop.sku_image }}" class="img-thumbnail" style="width: 60px; height: 60px" />
+                  {% endfor %}
+                </td>
+                <td>
+                  {% for prop in sku.ae_sku_property_dtos.ae_sku_property_d_t_o %}
+                  {{ prop.property_value_definition_name }}
+                  {% endfor %}
+                </td>
+                <td>
+                  {% for prop in sku.ae_sku_property_dtos.ae_sku_property_d_t_o %}
+                  {{ prop.sku_property_value }}
+                  {% endfor %}
+                </td>
+                <td>{{ sku.offer_sale_price }}</td>
+                <td>{{ sku.sku_available_stock }}</td>
+                <td>{{sku.sku_code}}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
 
         <!-- Informações da Loja -->
-        <div class="mt-4 card">
-          <div class="card-body">
-            <h5 class="card-title">{{ product.ae_store_info.store_name }}</h5>
-            <p class="card-text">
-              <strong>Avaliações da Loja:</strong><br>
-              - Velocidade de Envio: {{ product.ae_store_info.shipping_speed_rating }}<br>
-              - Comunicação: {{ product.ae_store_info.communication_rating }}<br>
-              - Descrição do Produto: {{ product.ae_store_info.item_as_described_rating }}
-            </p>
-          </div>
-        </div>
+        <h2 class="h4">Avaliações da Loja</h2>
+        <ul class="list-group">
+          <li class="list-group-item">
+            <strong>Nome da Loja:</strong> {{ product.ae_store_info.store_name }}
+          </li>
+          <li class="list-group-item">
+            <strong>Velocidade de Envio:</strong> {{ product.ae_store_info.shipping_speed_rating }}
+          </li>
+          <li class="list-group-item">
+            <strong>Comunicação:</strong> {{ product.ae_store_info.communication_rating }}
+          </li>
+          <li class="list-group-item">
+            <strong>Descrição do Produto:</strong> {{ product.ae_store_info.item_as_described_rating }}
+          </li>
+        </ul>
       </div>
     </div>
   </div>
 </div>
-
-<!-- Adicionar Bootstrap Carousel JS -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
-<!-- Adicionar Font Awesome para Ícones -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 
 {% endblock %}

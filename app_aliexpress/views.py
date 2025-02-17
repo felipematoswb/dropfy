@@ -292,9 +292,9 @@ def product_detail_aliexpress(request, product_id):
 
     # Processe a descrição do produto
     processed_description = process_product_description(
-        product.ae_item_base_info_dto.detail
+        product["ae_item_base_info_dto"]["detail"]
     )
-    product.ae_item_base_info_dto.detail = processed_description
+    product["ae_item_base_info_dto"]["detail"] = processed_description
 
     return render(
         request, "app_aliexpress/aliexpress_product_detail.html", {"product": product}
@@ -423,14 +423,24 @@ def recommend_feed_aliexpress(request, feed_name):
                 {"error": "Nenhum produto encontrado para esta promoção."},
             )
 
+        # Paginação
+        paginator = Paginator(products, 20)  # 10 itens por página
+        page_number = request.GET.get("page")
+
+        try:
+            page_obj = paginator.page(page_number)
+        except PageNotAnInteger:
+            page_obj = paginator.page(1)  # Página inicial se o número não for inteiro
+        except EmptyPage:
+            page_obj = paginator.page(
+                paginator.num_pages
+            )  # Última página se o número for inválido
+
         # Passa os produtos para o template
         return render(
             request,
             "app_aliexpress/aliexpress_recommend_feed.html",
-            {
-                "products": products,
-                "feed_name": feed_name,
-            },
+            {"products": products, "feed_name": feed_name, "page_obj": page_obj},
         )
 
     except requests.exceptions.RequestException as e:

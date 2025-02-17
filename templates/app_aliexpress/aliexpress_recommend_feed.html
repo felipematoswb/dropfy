@@ -26,10 +26,7 @@
           {% for product in products %}
           <tr>
             <td>
-              <img
-                src="{{ product.product_main_image_url }}"
-                alt="{{ product.product_title }}"
-                class="img-thumbnail"
+              <img src="{{ product.product_main_image_url }}" alt="{{ product.product_title }}" class="img-thumbnail"
                 style="width: 80px; height: 80px" />
             </td>
             <td>{{ product.product_title|truncatechars:80 }}</td>
@@ -44,17 +41,12 @@
             <td>{{ product.evaluate_rate }}</td>
             <td>{{ product.lastest_volume }}</td>
             <td>
-              <a
-                href="{% url 'product_detail_aliexpress' product.product_id %}"
-                target="_blank"
+              <a href="{% url 'product_detail_aliexpress' product.product_id %}" target="_blank"
                 class="btn btn-success btn-sm">
                 <i class="fas fa-link"></i>
                 Detalhes
               </a>
-              <a
-                href="{{ product.product_detail_url }}"
-                target="_blank"
-                class="btn btn-danger btn-sm">
+              <a href="{{ product.product_detail_url }}" target="_blank" class="btn btn-danger btn-sm">
                 <i class="fas fa-external-link-alt"></i> Aliexpress
               </a>
             </td>
@@ -74,10 +66,7 @@
           </a>
         </li>
         <li class="page-item">
-          <a
-            class="page-link"
-            href="?page={{ page_obj.previous_page_number }}"
-            aria-label="Previous">
+          <a class="page-link" href="?page={{ page_obj.previous_page_number }}" aria-label="Previous">
             <span aria-hidden="true">&laquo;</span>
           </a>
         </li>
@@ -91,18 +80,12 @@
 
         {% if page_obj.has_next %}
         <li class="page-item">
-          <a
-            class="page-link"
-            href="?page={{ page_obj.next_page_number }}"
-            aria-label="Next">
+          <a class="page-link" href="?page={{ page_obj.next_page_number }}" aria-label="Next">
             <span aria-hidden="true">&raquo;</span>
           </a>
         </li>
         <li class="page-item">
-          <a
-            class="page-link"
-            href="?page={{ page_obj.paginator.num_pages }}"
-            aria-label="Last">
+          <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}" aria-label="Last">
             <span aria-hidden="true">&raquo;&raquo;</span>
           </a>
         </li>
@@ -113,8 +96,6 @@
 </div>
 
 <!-- Adicionar Font Awesome para Ícones -->
-<link
-  rel="stylesheet"
-  href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
 
 {% endblock %}
