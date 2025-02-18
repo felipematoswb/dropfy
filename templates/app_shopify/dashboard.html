@@ -17,8 +17,7 @@
         </thead>
         <tbody>
           {% for store in stores %}
-          <tr
-            class="{% if store.is_active %}table-success{% else %}table-secondary{% endif %}">
+          <tr class="{% if store.is_active %}table-success{% else %}table-secondary{% endif %}">
             <td>{{ store.shop_url }}</td>
             <td>
               {% if store.is_active %}
@@ -30,16 +29,15 @@
             <td>
               <div class="d-flex gap-2">
                 {% if not store.is_active %}
-                <a
-                  href="{% url 'activate_store' store.id %}"
-                  class="btn btn-sm btn-success">
+                <a href="{% url 'activate_store_shopify' store.id %}" class="btn btn-sm btn-success">
                   <i class="fas fa-check-circle"></i> Active
                 </a>
                 {% endif %}
-                <a
-                  href="{% url 'remove_store' store.id %}"
-                  class="btn btn-sm btn-danger">
+                <a href="{% url 'remove_store_shopify' store.id %}" class="btn btn-sm btn-danger">
                   <i class="fas fa-trash-alt"></i> Delete
+                </a>
+                <a href="{% url 'list_products_shopify' store.id %}" class="btn btn-sm btn-primary">
+                  <i class="fas fa-bars"></i> Products
                 </a>
               </div>
             </td>

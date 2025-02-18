@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import functools
 import time
+from urllib.parse import unquote
 from bs4 import BeautifulSoup
 from django.shortcuts import redirect, render
 from decouple import config
@@ -20,6 +21,7 @@ APP_URL_SYNC = "https://api-sg.aliexpress.com/sync"
 
 ALIEXPRESS_TARGET_CURRENCY = "BRL"
 ALIEXPRESS_SHIP_COUNTRY = "BR"
+ALIEXPRESS_LOCALE = "pt_BR"
 
 
 def token_required(view_func):
@@ -296,8 +298,17 @@ def product_detail_aliexpress(request, product_id):
     )
     product["ae_item_base_info_dto"]["detail"] = processed_description
 
+    # processe o frete do produto
+    freights = shipping_aliexpress(
+        request.session["aliexpress_access_token"],
+        product_id,
+        sku_id=product["ae_item_sku_info_dtos"]["ae_item_sku_info_d_t_o"][0]["sku_id"],
+    )
+
     return render(
-        request, "app_aliexpress/aliexpress_product_detail.html", {"product": product}
+        request,
+        "app_aliexpress/aliexpress_product_detail.html",
+        {"product": product, "freights": freights},
     )
 
 
@@ -341,6 +352,7 @@ def feedname_aliexpress(request):
                 .get("resp_result", {})
                 .get("result", {})
             )
+
             if result and "promos" in result and "promo" in result["promos"]:
                 promos = result["promos"]["promo"]
                 request.session["promos"] = promos  # Salva os dados na sessão
@@ -390,7 +402,7 @@ def recommend_feed_aliexpress(request, feed_name):
         "sort": "priceAsc",  # Ordenação
         "page_no": request.GET.get("page", 1),  # Página atual
         # 'category_id': 21,  # ID da categoria
-        "feed_name": feed_name,  # Nome da promoção (passado como parâmetro)
+        "feed_name": unquote(feed_name),  # Nome da promoção (passado como parâmetro)
     }
 
     # Gera o sign dinamicamente
@@ -450,3 +462,56 @@ def recommend_feed_aliexpress(request, feed_name):
             "app_aliexpress/aliexpress_recommend_feed.html",
             {"error": "Erro ao carregar os produtos. Tente novamente mais tarde."},
         )
+
+
+def shipping_aliexpress(access_token, product_id, sku_id):
+    METHOD = "aliexpress.ds.freight.query"
+    URL_FULL = APP_URL_SYNC + METHOD
+
+    query_delivery_req = {
+        "productId": product_id,
+        "selectedSkuId": sku_id,
+        "currency": ALIEXPRESS_TARGET_CURRENCY,
+        "shipToCountry": ALIEXPRESS_SHIP_COUNTRY,
+        "quantity": 1,
+        "language": ALIEXPRESS_LOCALE,
+        "locale": "zh_CN",
+    }
+    # Parâmetros da requisição
+    PARAMS = {
+        "app_key": APP_KEY,
+        "timestamp": str(int(time.time() * 1000)),  # Timestamp em milissegundos
+        "sign_method": "sha256",
+        "method": METHOD,
+        "access_token": access_token,
+        "queryDeliveryReq": json.dumps(query_delivery_req),
+    }
+
+    # Gera o sign dinamicamente
+    PARAMS["sign"] = generate_sign(APP_SECRET, METHOD, PARAMS)
+
+    # Cabeçalhos da requisição
+    HEADERS = {"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"}
+
+    try:
+        logger.info(f"Fazendo requisição para {URL_FULL} com parâmetros: {PARAMS}")
+        response = requests.post(URL_FULL, data=PARAMS, headers=HEADERS, timeout=10)
+        response.raise_for_status()
+        logger.info(f"Resposta recebida: {response.status_code}")
+
+        # Decodificando a resposta JSON
+        response_data = response.json()
+
+        # Verifica se a resposta contém os dados esperados
+        result = response_data.get("aliexpress_ds_freight_query_response", {}).get(
+            "result", {}
+        )
+        if result:
+            return result
+        else:
+            logger.error("Resposta da API inválida ou sem dados.")
+            return {"error": "Erro ao obter dados da API."}
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Erro ao executar a requisição: {str(e)}", exc_info=True)
+        return {"error": "Erro interno ao processar a requisição."}

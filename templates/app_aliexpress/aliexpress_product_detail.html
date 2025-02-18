@@ -97,6 +97,42 @@
           </li>
         </ul>
 
+        <br>
+        <h2 class="h4">Opções de Envio</h2>
+        {% for freight in freights.delivery_options.delivery_option_d_t_o %}
+        <ul class="list-group">
+          <li class="list-group-item">
+            <strong>Code:</strong> {{ freight.code }}
+          </li>
+          <li class="list-group-item">
+            <strong>free_shipping:</strong> {{ freight.free_shipping }}
+          </li>
+          <li class="list-group-item">
+            <strong>guaranteed_delivery_days:</strong> {{ freight.guaranteed_delivery_days }}
+          </li>
+          <li class="list-group-item">
+            <strong>max_delivery_days:</strong> {{ freight.max_delivery_days }}
+          </li>
+          <li class="list-group-item">
+            <strong>tracking:</strong> {{ freight.tracking }}
+          </li>
+          <li class="list-group-item">
+            <strong>shipping_fee_format:</strong> {{ freight.shipping_fee_format }}
+          </li>
+          <li class="list-group-item">
+            <strong>free_shipping_threshold:</strong> {{ freight.free_shipping_threshold }}
+          </li>
+          <li class="list-group-item">
+            <strong>delivery_date_desc:</strong> {{ freight.delivery_date_desc }}
+          </li>
+          <li class="list-group-item">
+            <strong>company:</strong> {{ freight.company }}
+          </li>
+          <li class="list-group-item">
+            <strong>min_delivery_days:</strong> {{ freight.min_delivery_days }}
+          </li>
+        </ul>
+        {% endfor %}
         <!-- Variações do Produto (SKUs) -->
         <br>
         <h2 class="h4">Variações do Produto</h2>

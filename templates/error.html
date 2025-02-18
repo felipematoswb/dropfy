@@ -1,13 +1,21 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-</head>
-<body>
-    {% if error %}
-        <p>{{ error }}</p>
-    {% endif %}
-</body>
-</html>
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="jumbotron jumbotron-fluid bg-light">
+    <div class="container">
+        <h1 class="display-4 text-danger">Error</h1>
+        <p class="lead">An error occurred while processing your request.</p>
+        <hr class="my-4" />
+
+        <div class="alert alert-danger" role="alert">
+            <i class="fas fa-exclamation-circle"></i> {{ error }}
+        </div>
+
+        <div class="mt-4">
+            <a href="{% url 'dashboard_shopify' %}" class="btn btn-dark btn-lg">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

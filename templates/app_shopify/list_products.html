@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="jumbotron jumbotron-fluid bg-light">
+    <div class="container">
+        <h1 class="display-4">Products</h1>
+        <p class="lead">Manage your products and track their details.</p>
+        <hr class="my-4" />
+
+        {% if products %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Title</th>
+                        <th>Description</th>
+                        <th>Price</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in products %}
+                    <tr>
+                        <td>{{ product.title }}</td>
+                        <td>{{ product.description | safe | truncatewords:20 }}</td>
+                        <td>${{ product.price }}</td>
+                        <td>
+                            {% if product.status == 'ACTIVE' %}
+                            <span class="badge bg-success">Active</span>
+                            {% elif product.status == 'ARCHIVED' %}
+                            <span class="badge bg-warning">Archived</span>
+                            {% elif product.status == 'DRAFT' %}
+                            <span class="badge bg-secondary">Draft</span>
+                            {% else %}
+                            <span class="badge bg-danger">Unknown</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info" role="alert">
+            <i class="fas fa-info-circle"></i> No products found.
+        </div>
+        {% endif %}
+
+        <div class="mt-4">
+            <a href="{% url 'dashboard_shopify' %}" class="btn btn-dark btn-lg">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
