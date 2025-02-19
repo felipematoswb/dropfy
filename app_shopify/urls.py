@@ -21,4 +21,9 @@ urlpatterns = [
         views.list_products_shopify,
         name="list_products_shopify",
     ),
+    path(
+        "push/<int:product_id>/",
+        views.push_product_shopify,
+        name="push_product_shopify",
+    ),
 ]

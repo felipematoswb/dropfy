@@ -308,7 +308,7 @@ def product_detail_aliexpress(request, product_id):
     return render(
         request,
         "app_aliexpress/aliexpress_product_detail.html",
-        {"product": product, "freights": freights},
+        {"product": product, "freights": freights, "product_id": product_id},
     )
 
 
@@ -386,81 +386,86 @@ def feedname_aliexpress(request):
 
 
 def recommend_feed_aliexpress(request, feed_name):
-    # Parâmetros da requisição
-    METHOD = "aliexpress.ds.recommend.feed.get"
-    URL_FULL = APP_URL_SYNC + "/" + METHOD
+    """recommend feed aliexpress."""
 
-    PARAMS = {
+    method = "aliexpress.ds.recommend.feed.get"
+    url_full = APP_URL_SYNC + "/" + method
+
+    page_no = int(request.GET.get("page", 1))  # Current page number from request
+    page_size = 50  # Products per page
+
+    params = {
         "app_key": APP_KEY,
-        "method": METHOD,
-        "timestamp": str(int(time.time() * 1000)),  # Timestamp em milissegundos
+        "method": method,
+        "timestamp": str(int(time.time() * 1000)),
         "sign_method": "sha256",
-        "country": "BR",  # País
-        "target_currency": "BRL",  # Moeda
-        "target_language": "EN",  # Idioma
-        "page_size": 50,  # Número de produtos por página
-        "sort": "priceAsc",  # Ordenação
-        "page_no": request.GET.get("page", 1),  # Página atual
-        # 'category_id': 21,  # ID da categoria
-        "feed_name": unquote(feed_name),  # Nome da promoção (passado como parâmetro)
+        "country": "BR",
+        "target_currency": "BRL",
+        "target_language": "EN",
+        "page_size": page_size,
+        "sort": "volumeDesc",
+        "page_no": page_no,
+        "feed_name": unquote(feed_name),
     }
 
-    # Gera o sign dinamicamente
-    PARAMS["sign"] = generate_sign(APP_SECRET, METHOD, PARAMS)
-
-    # Cabeçalhos da requisição
-    HEADERS = {"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"}
+    params["sign"] = generate_sign(APP_SECRET, method, params)
+    headers = {"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"}
 
     try:
-        logger.info(f"Fazendo requisição para {URL_FULL} com parâmetros: {PARAMS}")
-        response = requests.post(URL_FULL, data=PARAMS, headers=HEADERS, timeout=10)
+        response = requests.post(url_full, data=params, headers=headers, timeout=10)
         response.raise_for_status()
-        logger.info(f"Resposta recebida: {response.status_code}")
-
-        # Decodificando a resposta JSON
         response_data = response.json()
 
-        # Verifica se a resposta contém os dados esperados
-        products = (
-            response_data.get("aliexpress_ds_recommend_feed_get_response", {})
-            .get("result", {})
-            .get("products", {})
-            .get("traffic_product_d_t_o", [])
-        )
-        if not products:
-            logger.error("Nenhum produto encontrado na resposta da API.")
+        api_result = response_data.get(
+            "aliexpress_ds_recommend_feed_get_response", {}
+        ).get("result")
+        if not api_result:
+            error_message = response_data.get(
+                "aliexpress_ds_recommend_feed_get_response", {}
+            ).get("error_message", "Unknown API Error")
             return render(
                 request,
                 "app_aliexpress/aliexpress_recommend_feed.html",
-                {"error": "Nenhum produto encontrado para esta promoção."},
+                {"error": error_message},
             )
 
-        # Paginação
-        paginator = Paginator(products, 20)  # 10 itens por página
-        page_number = request.GET.get("page")
+        products = api_result.get("products", {}).get("traffic_product_d_t_o", [])
+        total_record_count = int(
+            api_result.get("total_record_count", 0)
+        )  # Total products available
+        is_finished = api_result.get(
+            "is_finished", False
+        )  # Whether there are more pages
 
-        try:
-            page_obj = paginator.page(page_number)
-        except PageNotAnInteger:
-            page_obj = paginator.page(1)  # Página inicial se o número não for inteiro
-        except EmptyPage:
-            page_obj = paginator.page(
-                paginator.num_pages
-            )  # Última página se o número for inválido
+        # Calculate total pages
+        total_pages = (total_record_count + page_size - 1) // page_size
 
-        # Passa os produtos para o template
+        # Validate page_no
+        if page_no < 1 or page_no > total_pages:
+            return render(
+                request,
+                "app_aliexpress/aliexpress_recommend_feed.html",
+                {"error": f"Invalid page number. Valid range: 1 to {total_pages}."},
+            )
+
         return render(
             request,
             "app_aliexpress/aliexpress_recommend_feed.html",
-            {"products": products, "feed_name": feed_name, "page_obj": page_obj},
+            {
+                "products": products,
+                "feed_name": feed_name,
+                "current_page": page_no,
+                "total_results": total_record_count,
+                "total_pages": total_pages,  # Pass total_pages to the template
+                "is_finished": is_finished,  # Pass is_finished to the template
+            },
         )
 
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Erro ao executar a requisição: {str(e)}", exc_info=True)
+    except requests.exceptions.RequestException:
         return render(
             request,
             "app_aliexpress/aliexpress_recommend_feed.html",
-            {"error": "Erro ao carregar os produtos. Tente novamente mais tarde."},
+            {"error": "Error loading products. Please try again later."},
         )
 
 

@@ -154,3 +154,8 @@ def list_products_shopify(request, store_id):
     finally:
         # Desativa a sessão da Shopify
         shopify.ShopifyResource.clear_session()
+
+
+def push_product_shopify(request, product_id):
+
+    return render(request, "app_shopify/shopify_push_product.html")

@@ -1,54 +1,40 @@
-{% extends "base.html" %} {% block content %}
-<div class="jumbotron jumbotron-fluid bg-light">
+{% extends "base.html" %}
+{% block content %}
+<div class="jumbotron">
   <div class="container">
-    <h1 class="display-4">Feedname: {{ feed_name }}</h1>
-    <p class="lead">
-      View the products in this category and their detailed information.
-    </p>
+    <h1>Feedname: {{ feed_name }}</h1>
     <hr class="my-4" />
 
-    <!-- Tabela de Produtos -->
-    <div class="table-responsive shadow-sm rounded-lg">
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% elif products %}
+    <div class="table-responsive">
       <table class="table table-hover">
-        <thead class="table-light">
+        <thead>
           <tr>
-            <th scope="col">Image</th>
-            <th scope="col">Product</th>
-            <th scope="col">Category</th>
-            <th scope="col">Price</th>
-
-            <th scope="col">Reviews</th>
-            <th scope="col">Sell</th>
-            <th scope="col">Link</th>
+            <th>Image</th>
+            <th>Product</th>
+            <th>Category</th>
+            <th>Price</th>
+            <th>Reviews</th>
+            <th>Sell</th>
+            <th>Link</th>
           </tr>
         </thead>
         <tbody>
           {% for product in products %}
           <tr>
-            <td>
-              <img src="{{ product.product_main_image_url }}" alt="{{ product.product_title }}" class="img-thumbnail"
-                style="width: 80px; height: 80px" />
-            </td>
+            <td><img src="{{ product.product_main_image_url }}" alt="{{ product.product_title }}"
+                style="width: 80px; height: 80px" /></td>
             <td>{{ product.product_title|truncatechars:80 }}</td>
-            <td>
-              {{ product.first_level_category_name }}<br />
-              -{{product.second_level_category_name}}
-            </td>
-            <td>
-              {{ product.target_sale_price_currency }} {{ product.sale_price}}
-            </td>
-
+            <td>{{ product.first_level_category_name }}<br />-{{ product.second_level_category_name }}</td>
+            <td>{{ product.target_sale_price_currency }} {{ product.sale_price }}</td>
             <td>{{ product.evaluate_rate }}</td>
             <td>{{ product.lastest_volume }}</td>
             <td>
               <a href="{% url 'product_detail_aliexpress' product.product_id %}" target="_blank"
-                class="btn btn-success btn-sm">
-                <i class="fas fa-link"></i>
-                Detalhes
-              </a>
-              <a href="{{ product.product_detail_url }}" target="_blank" class="btn btn-danger btn-sm">
-                <i class="fas fa-external-link-alt"></i> Aliexpress
-              </a>
+                class="btn btn-success btn-sm">Details</a>
+              <a href="{{ product.product_detail_url }}" target="_blank" class="btn btn-danger btn-sm">Aliexpress</a>
             </td>
           </tr>
           {% endfor %}
@@ -56,46 +42,32 @@
       </table>
     </div>
 
-    <!-- Paginação -->
     <nav class="mt-4">
       <ul class="pagination justify-content-center">
-        {% if page_obj.has_previous %}
+        {% if current_page > 1 %}
         <li class="page-item">
-          <a class="page-link" href="?page=1" aria-label="First">
-            <span aria-hidden="true">&laquo;&laquo;</span>
-          </a>
+          <a class="page-link" href="?page=1">&laquo;&laquo;</a>
         </li>
         <li class="page-item">
-          <a class="page-link" href="?page={{ page_obj.previous_page_number }}" aria-label="Previous">
-            <span aria-hidden="true">&laquo;</span>
-          </a>
+          <a class="page-link" href="?page={{ current_page|add:" -1" }}">&laquo;</a>
         </li>
         {% endif %}
 
         <li class="page-item disabled">
-          <span class="page-link">
-            Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}.
-          </span>
+          <span class="page-link">Page {{ current_page }} of {{ total_pages }}</span>
         </li>
 
-        {% if page_obj.has_next %}
+        {% if not is_finished %}
         <li class="page-item">
-          <a class="page-link" href="?page={{ page_obj.next_page_number }}" aria-label="Next">
-            <span aria-hidden="true">&raquo;</span>
-          </a>
+          <a class="page-link" href="?page={{ current_page|add:" 1" }}">&raquo;</a>
         </li>
         <li class="page-item">
-          <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}" aria-label="Last">
-            <span aria-hidden="true">&raquo;&raquo;</span>
-          </a>
+          <a class="page-link" href="?page={{ total_pages }}">&raquo;&raquo;</a>
         </li>
         {% endif %}
       </ul>
     </nav>
+    {% endif %}
   </div>
 </div>
-
-<!-- Adicionar Font Awesome para Ícones -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
-
 {% endblock %}

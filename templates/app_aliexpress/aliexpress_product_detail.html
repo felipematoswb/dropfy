@@ -4,9 +4,15 @@
 <div class="jumbotron jumbotron-fluid bg-light">
   <div class="container">
     <h2 class="display-5">{{ product.ae_item_base_info_dto.subject }}</h2>
-    <p class="lead">
-      Complete details of the product and its variations.
-    </p>
+    <div class="col-md-6">
+      <p class="lead">
+        Complete details of the product and its variations.
+      </p>
+    </div>
+    <div class="col-md-6">
+      <!-- Send to Shopify Button -->
+      <a class="btn btn-dark btn-lg" href="{% url 'push_product_shopify' product_id %}" role="button">Send Store</a>
+    </div>
     <hr class="my-4" />
 
     <div class="row">
