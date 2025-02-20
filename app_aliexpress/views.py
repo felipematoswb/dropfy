@@ -120,7 +120,11 @@ def callback_aliexpress(request):
 
     try:
         # Fazendo a requisição POST
-        response = requests.post(URL_FULL, data=PARAMS, headers=HEADERS)
+        response = requests.post(
+            URL_FULL,
+            data=PARAMS,
+            headers=HEADERS,
+        )
         response.raise_for_status()
 
         # Decodificando a resposta JSON
@@ -184,10 +188,13 @@ def refresh_aliexpress(request):
     HEADERS = {"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"}
 
     try:
-        logger.info(f"Fazendo requisição para {URL_FULL} com parâmetros: {PARAMS}")
-        response = requests.post(URL_FULL, data=PARAMS, headers=HEADERS, timeout=10)
+        response = requests.post(
+            URL_FULL,
+            data=PARAMS,
+            headers=HEADERS,
+            timeout=10,
+        )
         response.raise_for_status()
-        logger.info(f"Resposta recebida: {response.status_code}")
 
         # Decodificando a resposta JSON
         response_data = response.json()
@@ -212,11 +219,9 @@ def refresh_aliexpress(request):
         return {"success": True, "message": "Token renovado com sucesso."}
 
     except json.JSONDecodeError as e:
-        logger.error(f"Erro ao decodificar JSON: {e}")
         return {"error": f"Erro ao decodificar a resposta da API: {str(e)}"}
 
     except requests.exceptions.RequestException as e:
-        logger.error(f"Erro durante a chamada à API: {e}")
         # Verifica se o erro é devido a um refresh token inválido ou expirado
         if "invalid or expired" in str(e).lower():
             return {
@@ -227,20 +232,22 @@ def refresh_aliexpress(request):
 
 @token_required
 def dashboard_aliexpress(request):
+    """dashboard aliexpress"""
     return render(request, "app_aliexpress/aliexpress_dashboard.html")
 
 
 @token_required
 def product_detail_aliexpress(request, product_id):
-    METHOD = "aliexpress.ds.product.get"
-    URL_FULL = APP_URL_SYNC + METHOD
+    """product detail aliexpress"""
+    method = "aliexpress.ds.product.get"
+    url_full = APP_URL_SYNC + method
 
     # Parâmetros da requisição
-    PARAMS = {
+    params = {
         "app_key": APP_KEY,
         "timestamp": str(int(time.time() * 1000)),  # Timestamp em milissegundos
         "sign_method": "sha256",
-        "method": METHOD,
+        "method": method,
         "product_id": product_id,
         "target_currency": ALIEXPRESS_TARGET_CURRENCY,
         "ship_to_country": ALIEXPRESS_SHIP_COUNTRY,
@@ -248,16 +255,19 @@ def product_detail_aliexpress(request, product_id):
     }
 
     # Gera o sign dinamicamente
-    PARAMS["sign"] = generate_sign(APP_SECRET, METHOD, PARAMS)
+    params["sign"] = generate_sign(APP_SECRET, method, params)
 
     # Cabeçalhos da requisição
-    HEADERS = {"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"}
+    headers = {"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"}
 
     try:
-        logger.info(f"Fazendo requisição para {URL_FULL} com parâmetros: {PARAMS}")
-        response = requests.post(URL_FULL, data=PARAMS, headers=HEADERS, timeout=10)
+        response = requests.post(
+            url_full,
+            data=params,
+            headers=headers,
+            timeout=10,
+        )
         response.raise_for_status()
-        logger.info(f"Resposta recebida: {response.status_code}")
 
         # Decodificando a resposta JSON
         response_data = response.json()
@@ -274,8 +284,7 @@ def product_detail_aliexpress(request, product_id):
                 {"error": "Erro ao obter dados da API."},
             )
 
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Erro ao executar a requisição: {str(e)}", exc_info=True)
+    except requests.exceptions.RequestException:
         return render(
             request,
             "app_aliexpress/aliexpress_product_detail.html",
@@ -338,10 +347,9 @@ def feedname_aliexpress(request):
         HEADERS = {"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"}
 
         try:
-            logger.info(f"Fazendo requisição para {URL_FULL} com parâmetros: {PARAMS}")
+
             response = requests.post(URL_FULL, data=PARAMS, headers=HEADERS, timeout=10)
             response.raise_for_status()
-            logger.info(f"Resposta recebida: {response.status_code}")
 
             # Decodificando a resposta JSON
             response_data = response.json()
@@ -361,7 +369,7 @@ def feedname_aliexpress(request):
                 context["error"] = "Erro ao obter dados da API."
 
         except requests.exceptions.RequestException as e:
-            logger.error(f"Erro ao executar a requisição: {str(e)}", exc_info=True)
+
             context["error"] = "Erro interno ao processar a requisição."
     else:
         # Usa os dados da sessão
