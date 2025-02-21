@@ -1,15 +1,17 @@
+"""Module providing a function python version."""
 import hashlib
 import hmac
 import functools
 import time
-from urllib.parse import unquote
-from bs4 import BeautifulSoup
-from django.shortcuts import redirect, render
-from decouple import config
 import json
 import logging
-from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from urllib.parse import unquote
 import requests
+from bs4 import BeautifulSoup
+from decouple import config
+from django.shortcuts import redirect, render
+from django.core.paginator import EmptyPage, Paginator, PageNotAnInteger
+
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +27,7 @@ ALIEXPRESS_LOCALE = "pt_BR"
 
 
 def token_required(view_func):
+    """ look for token """
     @functools.wraps(view_func)
     def wrapper(request, *args, **kwargs):
         # Verifica se o token de acesso está presente na sessão
@@ -45,6 +48,7 @@ def token_required(view_func):
 
 
 def process_product_description(html_content):
+    """parser html aliexpress to app"""
     soup = BeautifulSoup(html_content, "html.parser")
     for img in soup.find_all("img"):
         if "width" in img.attrs:
@@ -56,6 +60,7 @@ def process_product_description(html_content):
 
 
 def generate_sign(secret, api_name, parameters):
+    """ generate sign aliexpress api page """
     # Ordena os parâmetros
     sorted_params = sorted(parameters)
     if "/" in api_name:
@@ -78,6 +83,7 @@ def generate_sign(secret, api_name, parameters):
 
 
 def authorization_aliexpress(request):
+    """ token verification """
     # Verifica se o token de acesso está presente e válido
     access_token = request.session.get("aliexpress_access_token")
     expire_in = request.session.get("aliexpress_expire_in", 0)
@@ -95,35 +101,37 @@ def authorization_aliexpress(request):
         )
     else:
         # Falha ao renovar o token, redireciona para o fluxo de autorização
-        REDIRECT_URI = request.build_absolute_uri("/aliexpress/callback/")
+        redirect_uri = request.build_absolute_uri("/aliexpress/callback/")
         return redirect(
-            f"https://api-sg.aliexpress.com/oauth/authorize?response_type=code&force_auth=true&redirect_uri={REDIRECT_URI}&client_id={APP_KEY}"
-        )
+            f"https://api-sg.aliexpress.com/oauth/authorize?response_type=code \
+                &force_auth=true&redirect_uri={redirect_uri}&client_id={APP_KEY}")
 
 
 def callback_aliexpress(request):
-    METHOD = "/auth/token/create"
-    URL_FULL = APP_URL_REST + METHOD
+    """ callback function """
+    method = "/auth/token/create"
+    url_full = APP_URL_REST + method
 
     # Parâmetros da requisição
-    PARAMS = {
+    params = {
         "app_key": APP_KEY,
         "timestamp": str(int(time.time() * 1000)),  # Timestamp em milissegundos
         "sign_method": "sha256",
         "code": request.GET.get("code"),
     }
 
-    PARAMS["sign"] = generate_sign(APP_SECRET, METHOD, PARAMS)
+    params["sign"] = generate_sign(APP_SECRET, method, params)
 
     # Cabeçalhos da requisição
-    HEADERS = {"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"}
+    headers = {"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"}
 
     try:
         # Fazendo a requisição POST
         response = requests.post(
-            URL_FULL,
-            data=PARAMS,
-            headers=HEADERS,
+            url_full,
+            data=params,
+            headers=headers,
+            timeout=10
         )
         response.raise_for_status()
 
@@ -148,15 +156,13 @@ def callback_aliexpress(request):
             response_data.get("expires_in")
         )
 
-    except json.JSONDecodeError as e:
-        logger.error(f"Erro ao decodificar JSON: {e}")
+    except json.JSONDecodeError:
         return redirect(
             "/aliexpress/authorization/",
             {"error": "Erro ao decodificar a resposta da API."},
         )
 
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Erro durante a chamada à API: {e}")
+    except requests.exceptions.RequestException:
         return redirect(
             "/aliexpress/authorization/",
             {"error": "Erro ao tentar obter tokens de acesso."},
@@ -166,15 +172,16 @@ def callback_aliexpress(request):
 
 
 def refresh_aliexpress(request):
+    """ refresh token  """
     refresh_token = request.session.get("aliexpress_refresh_token")
     if not refresh_token:
         return {"error": "Refresh token não encontrado na sessão."}
 
-    METHOD = "/auth/token/refresh"
-    URL_FULL = APP_URL_REST + METHOD
+    method = "/auth/token/refresh"
+    url_full = APP_URL_REST + method
 
     # Parâmetros da requisição
-    PARAMS = {
+    params = {
         "app_key": APP_KEY,
         "timestamp": str(int(time.time() * 1000)),  # Timestamp em milissegundos
         "sign_method": "sha256",
@@ -182,16 +189,16 @@ def refresh_aliexpress(request):
     }
 
     # Gera o sign dinamicamente
-    PARAMS["sign"] = generate_sign(APP_SECRET, METHOD, PARAMS)
+    params["sign"] = generate_sign(APP_SECRET, method, params)
 
     # Cabeçalhos da requisição
-    HEADERS = {"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"}
+    headers = {"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"}
 
     try:
         response = requests.post(
-            URL_FULL,
-            data=PARAMS,
-            headers=HEADERS,
+            url_full,
+            data=params,
+            headers=headers,
             timeout=10,
         )
         response.raise_for_status()
@@ -225,7 +232,8 @@ def refresh_aliexpress(request):
         # Verifica se o erro é devido a um refresh token inválido ou expirado
         if "invalid or expired" in str(e).lower():
             return {
-                "error": "The specified refresh token is invalid or expired. Redirecionando para autorização..."
+                "error": "The specified refresh token is invalid or expired. Redirecionando \
+                    para autorização..."
             }
         return {"error": f"Erro ao tentar renovar o token: {str(e)}"}
 
@@ -322,6 +330,7 @@ def product_detail_aliexpress(request, product_id):
 
 
 def feedname_aliexpress(request):
+    """ search feedname """
     context = {}
     promos = []
     # Verifica se o usuário solicitou uma atualização
@@ -329,26 +338,26 @@ def feedname_aliexpress(request):
 
     if refresh or "promos" not in request.session:
         # Faz uma nova requisição à API para atualizar os dados
-        METHOD = "aliexpress.ds.feedname.get"
-        URL_FULL = APP_URL_SYNC + METHOD
+        method = "aliexpress.ds.feedname.get"
+        url_full = APP_URL_SYNC + method
 
         # Parâmetros da requisição
-        PARAMS = {
+        params = {
             "app_key": APP_KEY,
             "timestamp": str(int(time.time() * 1000)),  # Timestamp em milissegundos
             "sign_method": "sha256",
-            "method": METHOD,
+            "method": method,
         }
 
         # Gera o sign dinamicamente
-        PARAMS["sign"] = generate_sign(APP_SECRET, METHOD, PARAMS)
+        params["sign"] = generate_sign(APP_SECRET, method, params)
 
         # Cabeçalhos da requisição
-        HEADERS = {"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"}
+        headers = {"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"}
 
         try:
 
-            response = requests.post(URL_FULL, data=PARAMS, headers=HEADERS, timeout=10)
+            response = requests.post(url_full, data=params, headers=headers, timeout=10)
             response.raise_for_status()
 
             # Decodificando a resposta JSON
@@ -368,7 +377,7 @@ def feedname_aliexpress(request):
                 logger.error("Resposta da API inválida ou sem dados.")
                 context["error"] = "Erro ao obter dados da API."
 
-        except requests.exceptions.RequestException as e:
+        except requests.exceptions.RequestException:
 
             context["error"] = "Erro interno ao processar a requisição."
     else:
@@ -478,8 +487,9 @@ def recommend_feed_aliexpress(request, feed_name):
 
 
 def shipping_aliexpress(access_token, product_id, sku_id):
-    METHOD = "aliexpress.ds.freight.query"
-    URL_FULL = APP_URL_SYNC + METHOD
+    """ calculate shiiping product """
+    method = "aliexpress.ds.freight.query"
+    url_full = APP_URL_SYNC + method
 
     query_delivery_req = {
         "productId": product_id,
@@ -491,26 +501,24 @@ def shipping_aliexpress(access_token, product_id, sku_id):
         "locale": "zh_CN",
     }
     # Parâmetros da requisição
-    PARAMS = {
+    params = {
         "app_key": APP_KEY,
         "timestamp": str(int(time.time() * 1000)),  # Timestamp em milissegundos
         "sign_method": "sha256",
-        "method": METHOD,
+        "method": method,
         "access_token": access_token,
         "queryDeliveryReq": json.dumps(query_delivery_req),
     }
 
     # Gera o sign dinamicamente
-    PARAMS["sign"] = generate_sign(APP_SECRET, METHOD, PARAMS)
+    params["sign"] = generate_sign(APP_SECRET, method, params)
 
     # Cabeçalhos da requisição
-    HEADERS = {"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"}
+    headers = {"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"}
 
     try:
-        logger.info(f"Fazendo requisição para {URL_FULL} com parâmetros: {PARAMS}")
-        response = requests.post(URL_FULL, data=PARAMS, headers=HEADERS, timeout=10)
+        response = requests.post(url_full, data=params, headers=headers, timeout=10)
         response.raise_for_status()
-        logger.info(f"Resposta recebida: {response.status_code}")
 
         # Decodificando a resposta JSON
         response_data = response.json()
@@ -525,6 +533,5 @@ def shipping_aliexpress(access_token, product_id, sku_id):
             logger.error("Resposta da API inválida ou sem dados.")
             return {"error": "Erro ao obter dados da API."}
 
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Erro ao executar a requisição: {str(e)}", exc_info=True)
+    except requests.exceptions.RequestException:
         return {"error": "Erro interno ao processar a requisição."}

@@ -2,7 +2,7 @@ asgiref==3.8.1
 beautifulsoup4==4.13.3
 certifi==2025.1.31
 charset-normalizer==3.4.1
-Django==5.1.6
+Django
 idna==3.10
 pyactiveresource==2.2.2
 PyJWT==2.10.1
@@ -14,4 +14,4 @@ six==1.17.0
 soupsieve==2.6
 sqlparse==0.5.3
 typing_extensions==4.12.2
-urllib3==2.3.0
+urllib3
