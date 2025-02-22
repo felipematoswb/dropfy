@@ -1,5 +1,8 @@
+""" url for app """
 from django.urls import path
+
 from . import views
+
 
 urlpatterns = [
     path(
@@ -8,7 +11,6 @@ urlpatterns = [
         name="authorization_aliexpress",
     ),
     path("callback/", views.callback_aliexpress, name="callback_aliexpress"),
-    path("refresh/", views.refresh_aliexpress, name="refresh_aliexpress"),
     path("dashboard/", views.dashboard_aliexpress, name="dashboard_aliexpress"),
     path("feedname/", views.feedname_aliexpress, name="feedname_aliexpress"),
     path(

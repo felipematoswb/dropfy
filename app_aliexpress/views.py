@@ -1,16 +1,19 @@
 """Module providing a function python version."""
+from functools import wraps
 import hashlib
 import hmac
-import functools
 import time
 import json
 import logging
-from urllib.parse import unquote
+from urllib.parse import quote, unquote
+import iop
 import requests
-from bs4 import BeautifulSoup
-from decouple import config
+from django.http import HttpResponseRedirect
 from django.shortcuts import redirect, render
 from django.core.paginator import EmptyPage, Paginator, PageNotAnInteger
+
+from bs4 import BeautifulSoup
+from decouple import config
 
 
 logger = logging.getLogger(__name__)
@@ -26,27 +29,6 @@ ALIEXPRESS_SHIP_COUNTRY = "BR"
 ALIEXPRESS_LOCALE = "pt_BR"
 
 
-def token_required(view_func):
-    """ look for token """
-    @functools.wraps(view_func)
-    def wrapper(request, *args, **kwargs):
-        # Verifica se o token de acesso está presente na sessão
-        access_token = request.session.get("aliexpress_access_token")
-        expire_in = request.session.get("aliexpress_expire_in", 0)
-
-        # Se o token estiver expirado ou não existir, renova o token
-        if not access_token or expire_in < int(time.time()):
-            refresh_result = refresh_aliexpress(request)
-            if "error" in refresh_result:
-                # Se houver erro ao renovar o token, retorna o erro
-                return render(request, "error.html", {"error": refresh_result["error"]})
-
-        # Chama a função original
-        return view_func(request, *args, **kwargs)
-
-    return wrapper
-
-
 def process_product_description(html_content):
     """parser html aliexpress to app"""
     soup = BeautifulSoup(html_content, "html.parser")
@@ -60,183 +42,183 @@ def process_product_description(html_content):
 
 
 def generate_sign(secret, api_name, parameters):
-    """ generate sign aliexpress api page """
-    # Ordena os parâmetros
-    sorted_params = sorted(parameters)
-    if "/" in api_name:
-        parameters_str = "%s%s" % (
-            api_name,
-            str().join("%s%s" % (key, parameters[key]) for key in sorted_params),
-        )
-    else:
-        parameters_str = str().join(
-            "%s%s" % (key, parameters[key]) for key in sorted_params
-        )
+    """Generate sign for Aliexpress API."""
 
-    # Gera o sign usando HMAC-SHA256
+    # URL encode parameters (Crucial for correct signing)
+    encoded_parameters = {k: quote(str(v)) for k, v in parameters.items()}
+
+    # Sort parameters
+    sorted_params = sorted(encoded_parameters)
+
+    # Build the parameter string using f-strings and handle api_name
+    if "/" in api_name:
+        parts = [f"{k}{encoded_parameters[k]}" for k in sorted_params]
+        parameters_str = f"{api_name}{''.join(parts)}"
+    else:
+        parts = [f"{k}{encoded_parameters[k]}" for k in sorted_params]
+        parameters_str = ''.join(parts)
+
+    # Generate the sign using HMAC-SHA256
     h = hmac.new(
-        secret.encode(encoding="utf-8"),
-        parameters_str.encode(encoding="utf-8"),
+        secret.encode("utf-8"),  # Encoding is important!
+        parameters_str.encode("utf-8"),  # Encoding must match!
         digestmod=hashlib.sha256,
     )
     return h.hexdigest().upper()
 
 
+def token_required(view_func):
+    """
+    Decorator to check and refresh the access token.
+    
+    Args:
+        view_func: The view function to decorate
+    
+    Returns:
+        HttpResponse: The wrapped view response or redirect
+    """
+    @wraps(view_func)
+    def _wrapped_view(request, *args, **kwargs):
+        expire_in = request.session.get("aliexpress_expire_in")
+
+        if not expire_in:
+            logger.warning("No expiration time set in session.")
+            return redirect("/aliexpress/authorization/", {"error": "Authentication required."})
+
+        current_time = int(time.time())
+        if current_time + 60 >= expire_in:  # Check if token needs refresh
+            try:
+                refresh_response = refresh_aliexpress_token(request)
+                # Improved type checking
+                if not isinstance(refresh_response, HttpResponseRedirect):
+                    logger.error("Refresh token function did not return a redirect.")
+                    return redirect("/aliexpress/authorization/", \
+                        {"error": "Token refresh failed."})
+                return refresh_response
+
+            except ValueError as ve:  # More specific exception
+                logger.exception("ValueError during token refresh: %s", ve)
+                return redirect(
+                    "/aliexpress/authorization/",
+                    {"error": "Token refresh failed. Please re-authenticate."}
+                )
+
+        return view_func(request, *args, **kwargs)
+
+    return _wrapped_view
+
+
 def authorization_aliexpress(request):
     """ token verification """
     # Verifica se o token de acesso está presente e válido
-    access_token = request.session.get("aliexpress_access_token")
-    expire_in = request.session.get("aliexpress_expire_in", 0)
+    # Falha ao renovar o token, redireciona para o fluxo de autorização
+    redirect_uri = request.build_absolute_uri("/aliexpress/callback/")
+    return redirect(
+        f"https://api-sg.aliexpress.com/oauth/authorize?response_type=code \
+            &force_auth=true&redirect_uri={redirect_uri}&client_id={APP_KEY}")
 
-    if access_token and int(time.time()) < expire_in:
-        # Token ainda válido
-        return redirect("/aliexpress/dashboard/", {"message": "Token ainda válido."})
-
-    # Token expirado ou ausente, tenta renovar
-    refresh_result = refresh_aliexpress(request)
-    if "success" in refresh_result:
-        # Token renovado com sucesso
-        return redirect(
-            "/aliexpress/dashboard/", {"message": refresh_result["message"]}
-        )
-    else:
-        # Falha ao renovar o token, redireciona para o fluxo de autorização
-        redirect_uri = request.build_absolute_uri("/aliexpress/callback/")
-        return redirect(
-            f"https://api-sg.aliexpress.com/oauth/authorize?response_type=code \
-                &force_auth=true&redirect_uri={redirect_uri}&client_id={APP_KEY}")
 
 
 def callback_aliexpress(request):
-    """ callback function """
-    method = "/auth/token/create"
-    url_full = APP_URL_REST + method
+    """Callback function using the iop library."""
 
-    # Parâmetros da requisição
-    params = {
-        "app_key": APP_KEY,
-        "timestamp": str(int(time.time() * 1000)),  # Timestamp em milissegundos
-        "sign_method": "sha256",
-        "code": request.GET.get("code"),
-    }
+    client = iop.IopClient(APP_URL_REST, APP_KEY, APP_SECRET)
+    request_iop = iop.IopRequest('/auth/token/create')
 
-    params["sign"] = generate_sign(APP_SECRET, method, params)
+    # Get the authorization code from the request
+    code = request.GET.get("code")
+    if not code:
+        return redirect(
+            "/aliexpress/authorization/",
+            {"error": "Authorization code is missing."},
+        )
 
-    # Cabeçalhos da requisição
-    headers = {"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"}
+    request_iop.add_api_param('code', code)
 
     try:
-        # Fazendo a requisição POST
-        response = requests.post(
-            url_full,
-            data=params,
-            headers=headers,
-            timeout=10
-        )
-        response.raise_for_status()
+        response = client.execute(request_iop)
 
-        # Decodificando a resposta JSON
-        response_data = response.json()
+        # response.body is ALREADY a dictionary.  No need for json.loads()
+        response_data = response.body  # Directly assign the dictionary
 
-        # Verifica se a resposta contém os campos esperados
         if not all(
             key in response_data
             for key in ["access_token", "refresh_token", "expires_in"]
         ):
-            logger.error("Resposta da API incompleta ou inválida.")
+            logger.error("Incomplete or invalid API response.")
             return redirect(
                 "/aliexpress/authorization/",
-                {"error": "Resposta da API incompleta ou inválida."},
+                {"error": "Incomplete or invalid API response."},
             )
 
-        # Armazenando os tokens na sessão
         request.session["aliexpress_access_token"] = response_data.get("access_token")
         request.session["aliexpress_refresh_token"] = response_data.get("refresh_token")
         request.session["aliexpress_expire_in"] = int(time.time()) + int(
             response_data.get("expires_in")
         )
+
+        return redirect("/aliexpress/dashboard/")
+
+    except (KeyError, TypeError):  # Catch potential dictionary access errors
+        logger.error("Error accessing data in API response.")
+        return redirect(
+            "/aliexpress/authorization/",
+            {"error": "Error processing API response."},
+        )
+
+
+
+def refresh_aliexpress_token(request):
+    """Refreshes the Aliexpress access token using the refresh token."""
+
+    refresh_token = request.session.get("aliexpress_refresh_token")
+    if not refresh_token:
+        logger.error("No refresh token found in session.")
+        return redirect("/aliexpress/authorization/", {"error": "No refresh token available."})
+
+
+    client = iop.IopClient(APP_URL_REST, APP_KEY, APP_SECRET)
+    request_iop = iop.IopRequest('/auth/token/refresh')
+    request_iop.add_api_param('refresh_token', refresh_token)
+
+    try:
+        response = client.execute(request_iop)
+
+        if response.type == "success":
+            response_data = json.loads(response.body)
+
+            if not all(
+                key in response_data
+                for key in ["access_token", "expires_in"]):
+                logger.error("Incomplete or invalid refresh token API response.")
+
+                return redirect("/aliexpress/authorization/", \
+                    {"error": "Invalid refresh token. Please re-authorize."})
+            request.session["aliexpress_access_token"] = response_data.get("access_token")
+            # Update the expiration time
+            request.session["aliexpress_expire_in"] = int(time.time()) \
+                + int(response_data.get("expires_in"))
+
+            # Refresh token may or may not be returned in the refresh response. Update if present.
+            new_refresh_token = response_data.get("refresh_token")
+            if new_refresh_token:
+                request.session["aliexpress_refresh_token"] = new_refresh_token
+
+            return redirect("/aliexpress/dashboard/")
+
+        else:
+            # Consider removing the old refresh token if the refresh fails
+            # del request.session["aliexpress_refresh_token"]
+            return redirect(
+                "/aliexpress/authorization/",
+                {"error": "Error refreshing access token. Please re-authorize."},
+            )
 
     except json.JSONDecodeError:
         return redirect(
             "/aliexpress/authorization/",
-            {"error": "Erro ao decodificar a resposta da API."},
+            {"error": "Error decoding refresh token API response."},
         )
-
-    except requests.exceptions.RequestException:
-        return redirect(
-            "/aliexpress/authorization/",
-            {"error": "Erro ao tentar obter tokens de acesso."},
-        )
-
-    return redirect("/aliexpress/dashboard/")
-
-
-def refresh_aliexpress(request):
-    """ refresh token  """
-    refresh_token = request.session.get("aliexpress_refresh_token")
-    if not refresh_token:
-        return {"error": "Refresh token não encontrado na sessão."}
-
-    method = "/auth/token/refresh"
-    url_full = APP_URL_REST + method
-
-    # Parâmetros da requisição
-    params = {
-        "app_key": APP_KEY,
-        "timestamp": str(int(time.time() * 1000)),  # Timestamp em milissegundos
-        "sign_method": "sha256",
-        "refresh_token": refresh_token,
-    }
-
-    # Gera o sign dinamicamente
-    params["sign"] = generate_sign(APP_SECRET, method, params)
-
-    # Cabeçalhos da requisição
-    headers = {"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"}
-
-    try:
-        response = requests.post(
-            url_full,
-            data=params,
-            headers=headers,
-            timeout=10,
-        )
-        response.raise_for_status()
-
-        # Decodificando a resposta JSON
-        response_data = response.json()
-
-        # Verifica se a resposta contém os campos esperados
-        if not all(
-            key in response_data
-            for key in ["access_token", "refresh_token", "expires_in"]
-        ):
-            error_message = response_data.get(
-                "message", "Resposta da API incompleta ou inválida."
-            )
-            return {"error": error_message}
-
-        # Atualiza os tokens na sessão
-        request.session["aliexpress_access_token"] = response_data.get("access_token")
-        request.session["aliexpress_refresh_token"] = response_data.get("refresh_token")
-        request.session["aliexpress_expire_in"] = int(time.time()) + int(
-            response_data.get("expires_in")
-        )
-
-        return {"success": True, "message": "Token renovado com sucesso."}
-
-    except json.JSONDecodeError as e:
-        return {"error": f"Erro ao decodificar a resposta da API: {str(e)}"}
-
-    except requests.exceptions.RequestException as e:
-        # Verifica se o erro é devido a um refresh token inválido ou expirado
-        if "invalid or expired" in str(e).lower():
-            return {
-                "error": "The specified refresh token is invalid or expired. Redirecionando \
-                    para autorização..."
-            }
-        return {"error": f"Erro ao tentar renovar o token: {str(e)}"}
-
 
 @token_required
 def dashboard_aliexpress(request):
@@ -244,7 +226,6 @@ def dashboard_aliexpress(request):
     return render(request, "app_aliexpress/aliexpress_dashboard.html")
 
 
-@token_required
 def product_detail_aliexpress(request, product_id):
     """product detail aliexpress"""
     method = "aliexpress.ds.product.get"
@@ -321,81 +302,74 @@ def product_detail_aliexpress(request, product_id):
         product_id,
         sku_id=product["ae_item_sku_info_dtos"]["ae_item_sku_info_d_t_o"][0]["sku_id"],
     )
-
     return render(
         request,
         "app_aliexpress/aliexpress_product_detail.html",
         {"product": product, "freights": freights, "product_id": product_id},
     )
 
-
+@token_required
 def feedname_aliexpress(request):
-    """ search feedname """
+    """Search feedname using AliExpress TOP API.
+    
+    Args:
+        request: HTTP request object
+    
+    Returns:
+        Rendered template with feedname data
+    """
     context = {}
     promos = []
-    # Verifica se o usuário solicitou uma atualização
+    # Check if refresh is requested
     refresh = request.GET.get("refresh") == "true" or request.method == "POST"
 
     if refresh or "promos" not in request.session:
-        # Faz uma nova requisição à API para atualizar os dados
-        method = "aliexpress.ds.feedname.get"
-        url_full = APP_URL_SYNC + method
-
-        # Parâmetros da requisição
-        params = {
-            "app_key": APP_KEY,
-            "timestamp": str(int(time.time() * 1000)),  # Timestamp em milissegundos
-            "sign_method": "sha256",
-            "method": method,
-        }
-
-        # Gera o sign dinamicamente
-        params["sign"] = generate_sign(APP_SECRET, method, params)
-
-        # Cabeçalhos da requisição
-        headers = {"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"}
-
         try:
-
-            response = requests.post(url_full, data=params, headers=headers, timeout=10)
-            response.raise_for_status()
-
-            # Decodificando a resposta JSON
-            response_data = response.json()
-
-            # Verifica se a resposta contém os dados esperados
-            result = (
-                response_data.get("aliexpress_ds_feedname_get_response", {})
-                .get("resp_result", {})
-                .get("result", {})
-            )
-
-            if result and "promos" in result and "promo" in result["promos"]:
-                promos = result["promos"]["promo"]
-                request.session["promos"] = promos  # Salva os dados na sessão
+            # Initialize TOP client
+            client = iop.IopClient(APP_URL_SYNC, APP_KEY, APP_SECRET)
+            # Create request
+            request_api = iop.IopRequest('aliexpress.ds.feedname.get')
+            # Add timestamp as API parameter (if required by your implementation)
+            request_api.add_api_param('timestamp', str(int(time.time() * 1000)))
+            # Execute request
+            response = client.execute(request_api)
+            # Process response
+            if response.body.get('aliexpress_ds_feedname_get_response', {}).get('resp_result', {}) \
+                .get('resp_code', {}) == 200:
+                result = response.body.get('aliexpress_ds_feedname_get_response', {}) \
+                               .get('resp_result', {}) \
+                               .get('result', {})
+                if result and "promos" in result and "promo" in result["promos"]:
+                    promos = result["promos"]["promo"]
+                    request.session["promos"] = promos
+                else:
+                    logger.error("Invalid API response structure: %s", response.body)
+                    context["error"] = "Error retrieving API data"
             else:
-                logger.error("Resposta da API inválida ou sem dados.")
-                context["error"] = "Erro ao obter dados da API."
+                logger.error("API request failed: %s", response.body)
+                context["error"] = "API request failed"
 
-        except requests.exceptions.RequestException:
 
-            context["error"] = "Erro interno ao processar a requisição."
+        except ValueError as ve:  # More specific exception
+            logger.exception("ValueError during token refresh: %s", ve)
+            return redirect(
+                    "/aliexpress/dashboard/",
+                    {"error": "Internal error processing request."}
+            )
     else:
-        # Usa os dados da sessão
-        promos = request.session["promos"]
+        # Use cached session data
+        promos = request.session.get("promos", [])
 
-    # Paginação
-    paginator = Paginator(promos, 10)  # 10 itens por página
+    # Pagination
+    paginator = Paginator(promos, 20)  # 10 items per page
     page_number = request.GET.get("page")
 
     try:
         page_obj = paginator.page(page_number)
     except PageNotAnInteger:
-        page_obj = paginator.page(1)  # Página inicial se o número não for inteiro
+        page_obj = paginator.page(1)
     except EmptyPage:
-        page_obj = paginator.page(
-            paginator.num_pages
-        )  # Última página se o número for inválido
+        page_obj = paginator.page(paginator.num_pages)
 
     context["page_obj"] = page_obj
 
@@ -403,68 +377,74 @@ def feedname_aliexpress(request):
 
 
 def recommend_feed_aliexpress(request, feed_name):
-    """recommend feed aliexpress."""
+    """Recommend feed from AliExpress using TOP API.
 
-    method = "aliexpress.ds.recommend.feed.get"
-    url_full = APP_URL_SYNC + "/" + method
+    Args:
+        request: HTTP request object
+        feed_name: Name of the feed to query
 
-    page_no = int(request.GET.get("page", 1))  # Current page number from request
-    page_size = 50  # Products per page
+    Returns:
+        Rendered template with recommended products or error message
+    """
 
-    params = {
-        "app_key": APP_KEY,
-        "method": method,
-        "timestamp": str(int(time.time() * 1000)),
-        "sign_method": "sha256",
-        "country": "BR",
-        "target_currency": "BRL",
-        "target_language": "EN",
-        "page_size": page_size,
-        "sort": "volumeDesc",
-        "page_no": page_no,
-        "feed_name": unquote(feed_name),
-    }
-
-    params["sign"] = generate_sign(APP_SECRET, method, params)
-    headers = {"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"}
+    page_no = int(request.GET.get("page", 1))
+    page_size = 50
 
     try:
-        response = requests.post(url_full, data=params, headers=headers, timeout=10)
-        response.raise_for_status()
-        response_data = response.json()
+        # Initialize TOP client
+        client = iop.IopClient(APP_URL_SYNC, APP_KEY, APP_SECRET)
+        # Create and configure request
+        request_api = iop.IopRequest('aliexpress.ds.recommend.feed.get')
+        request_api.add_api_param('country', 'BR')
+        request_api.add_api_param('target_currency', 'BRL')
+        request_api.add_api_param('target_language', 'EN')
+        request_api.add_api_param('page_size', str(page_size))
+        request_api.add_api_param('sort', 'volumeDesc')
+        request_api.add_api_param('page_no', str(page_no))
+        request_api.add_api_param('feed_name', unquote(feed_name))
+        request_api.add_api_param('timestamp', str(int(time.time() * 1000)))
 
-        api_result = response_data.get(
-            "aliexpress_ds_recommend_feed_get_response", {}
-        ).get("result")
-        if not api_result:
-            error_message = response_data.get(
-                "aliexpress_ds_recommend_feed_get_response", {}
-            ).get("error_message", "Unknown API Error")
+        # Execute request
+        response = client.execute(request_api)
+
+        # Check if response is successful
+        if response.body.get('aliexpress_ds_feedname_get_response', {}).get('resp_result', {}) \
+                .get('resp_code', {}) == 200:  # Adjust based on actual success indicator
+            error_message = response.body.get('error_message', 'Unknown API Error')
+            logger.error("API error: %s", error_message)
             return render(
                 request,
-                "app_aliexpress/aliexpress_recommend_feed.html",
+                "app_aliexpress/aliexpress_dashboard.html",
                 {"error": error_message},
             )
 
-        products = api_result.get("products", {}).get("traffic_product_d_t_o", [])
-        total_record_count = int(
-            api_result.get("total_record_count", 0)
-        )  # Total products available
-        is_finished = api_result.get(
-            "is_finished", False
-        )  # Whether there are more pages
+        # Extract result from response
+        api_result = response.body.get('aliexpress_ds_recommend_feed_get_response', {}) \
+            .get('result', {})
+        if not api_result:
+            logger.error("Empty result in API response: %s", response.body)
+            return render(
+                request,
+                "app_aliexpress/aliexpress_recommend_feed.html",
+                {"error": "No results returned from API"},
+            )
+
+        products = api_result.get('products', {}).get('traffic_product_d_t_o', [])
+        total_record_count = int(api_result.get('total_record_count', 0))
+        is_finished = api_result.get('is_finished', False)
 
         # Calculate total pages
         total_pages = (total_record_count + page_size - 1) // page_size
 
-        # Validate page_no
+        # Validate page number
         if page_no < 1 or page_no > total_pages:
             return render(
                 request,
                 "app_aliexpress/aliexpress_recommend_feed.html",
-                {"error": f"Invalid page number. Valid range: 1 to {total_pages}."},
+                {"error": f"Invalid page number. Valid range: 1 to {total_pages}"},
             )
 
+        # Render successful response
         return render(
             request,
             "app_aliexpress/aliexpress_recommend_feed.html",
@@ -473,24 +453,32 @@ def recommend_feed_aliexpress(request, feed_name):
                 "feed_name": feed_name,
                 "current_page": page_no,
                 "total_results": total_record_count,
-                "total_pages": total_pages,  # Pass total_pages to the template
-                "is_finished": is_finished,  # Pass is_finished to the template
+                "total_pages": total_pages,
+                "is_finished": is_finished,
             },
         )
 
-    except requests.exceptions.RequestException:
-        return render(
-            request,
-            "app_aliexpress/aliexpress_recommend_feed.html",
-            {"error": "Error loading products. Please try again later."},
+    except ValueError as ve:  # More specific exception
+        logger.exception("ValueError during token refresh: %s", ve)
+        return redirect(
+                "/aliexpress/dashboard/",
+                {"error": "Internal error processing request."}
         )
 
 
 def shipping_aliexpress(access_token, product_id, sku_id):
-    """ calculate shiiping product """
-    method = "aliexpress.ds.freight.query"
-    url_full = APP_URL_SYNC + method
+    """Calculate shipping for a product using AliExpress TOP API.
 
+    Args:
+        access_token (str): Authentication token
+        product_id (str): Product identifier
+        sku_id (str): SKU identifier
+
+    Returns:
+        dict: Shipping information or error details
+    """
+
+    # Prepare query delivery request
     query_delivery_req = {
         "productId": product_id,
         "selectedSkuId": sku_id,
@@ -500,38 +488,38 @@ def shipping_aliexpress(access_token, product_id, sku_id):
         "language": ALIEXPRESS_LOCALE,
         "locale": "zh_CN",
     }
-    # Parâmetros da requisição
-    params = {
-        "app_key": APP_KEY,
-        "timestamp": str(int(time.time() * 1000)),  # Timestamp em milissegundos
-        "sign_method": "sha256",
-        "method": method,
-        "access_token": access_token,
-        "queryDeliveryReq": json.dumps(query_delivery_req),
-    }
-
-    # Gera o sign dinamicamente
-    params["sign"] = generate_sign(APP_SECRET, method, params)
-
-    # Cabeçalhos da requisição
-    headers = {"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"}
 
     try:
-        response = requests.post(url_full, data=params, headers=headers, timeout=10)
-        response.raise_for_status()
+        # Initialize TOP client
+        client = iop.IopClient(APP_URL_SYNC, APP_KEY, APP_SECRET)
+        # Create and configure request
+        request = iop.IopRequest('aliexpress.ds.freight.query')
+        request.add_api_param('queryDeliveryReq', json.dumps(query_delivery_req))
+        request.add_api_param('timestamp', str(int(time.time() * 1000)))
 
-        # Decodificando a resposta JSON
-        response_data = response.json()
+        # Execute request with access token
+        response = client.execute(request, access_token)
 
-        # Verifica se a resposta contém os dados esperados
-        result = response_data.get("aliexpress_ds_freight_query_response", {}).get(
-            "result", {}
-        )
+        # Check response
+        if response.body.get('aliexpress_ds_freight_query_response', {}).get('result', {}) \
+                .get('code', {}) != 200:  # Adjust based on actual success indicator
+            error_msg = response.body.get('error_message', 'Unknown API Error')
+            logger.error("API error: %s", error_msg)
+            return {"error": error_msg}
+
+        # Extract result
+        result = response.body.get('aliexpress_ds_freight_query_response', {}).get('result', {}) \
+            .get('delivery_options', {}).get('delivery_option_d_t_o', {})
         if result:
             return result
         else:
-            logger.error("Resposta da API inválida ou sem dados.")
-            return {"error": "Erro ao obter dados da API."}
+            logger.error("Invalid or empty API response: %s", response.body)
+            return {"error": "Error retrieving API data"}
 
-    except requests.exceptions.RequestException:
-        return {"error": "Erro interno ao processar a requisição."}
+    except ValueError as ve:  # More specific exception
+        logger.exception("ValueError during token refresh: %s", ve)
+        return redirect(
+                "/aliexpress/dashboard/",
+                {"error": "Internal error processing request."}
+        )
+        
