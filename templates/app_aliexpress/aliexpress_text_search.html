@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="jumbotron jumbotron-fluid bg-light">
+  <div class="container">
+    <h1 class="display-4">AliExpress Text Search</h1>
+    {% if products %}
+    <p class="lead">Search results for "{{ keyword }}"</p>
+    {% endif %}
+    
+    <!-- Search Form -->
+    <form method="get" class="mb-4">
+      {% csrf_token %}
+      <div class="input-group">
+        <input type="text" class="form-control" name="keyword" value="{{ keyword }}" 
+               placeholder="Enter search term" required>
+        <button class="btn btn-dark" type="submit">Search</button>
+      </div>
+    </form>
+
+    {% if error %}
+      <div class="alert alert-danger" role="alert">
+        {{ error }}
+      </div>
+    {% endif %}
+    {% if products %}
+      <hr class="my-4" />
+      
+      <!-- Results Count -->
+      <p>Found {{ total_results }} results</p>
+
+      <!-- Products List -->
+      <div class="row">
+        {% for product in products %}
+          <div class="col-md-4 mb-3">
+            <div class="card h-100">
+              {% if product.itemMainPic %}
+                <img src="{{ product.itemMainPic }}" class="card-img-top" alt="{{ product.title }}" height="400" width="400">
+              {% endif %}
+              <div class="card-body">
+                <h5 class="card-title">{{ product.title|default:"Product" }}</h5>
+                <p class="card-text">
+                  <strong>Original Price:</strong> {{ product.originalPrice|default:"N/A" }} {{ product.originalPriceCurrency|default:"USD" }}<br>
+                  <strong>Sale Price:</strong> {{ product.salePriceFormat|default:product.salePrice|default:"N/A" }} {{ product.salePriceCurrency|default:"USD" }}<br>
+                  <strong>Discount:</strong> {{ product.discount|default:"N/A" }}<br>
+                  <strong>Rating:</strong> {{ product.score|default:"N/A" }} ({{ product.evaluateRate|default:"N/A" }}% positive)<br>
+                  <strong>Orders:</strong> {{ product.orders|default:"N/A" }}<br>
+                  <strong>Item ID:</strong> {{ product.itemId|default:"N/A" }}<br>
+                  <strong>Categories:</strong> {{ product.cateId|default:"N/A" }}
+                </p>
+              </div>
+              <div class="card-footer">
+                <a href="{{ product.itemUrl|default:'#' }}" class="btn btn-danger btn-sm" target="_blank">View Product</a>
+                <a href="{% url 'product_detail_aliexpress' product.itemId %}" target="_blank"
+                class="btn btn-success btn-sm">Details</a>
+              </div>
+            </div>
+          </div>
+        {% empty %}
+          <p class="text-muted">No products found.</p>
+        {% endfor %}
+      </div>
+
+      <!-- Pagination -->
+      <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+          {% if current_page > 1 %}
+            <li class="page-item">
+              <a class="page-link" href="?keyword={{ keyword }}&page=1">««</a>
+            </li>
+            <li class="page-item">
+              <a class="page-link" href="?keyword={{ keyword }}&page={{ current_page|add:-1 }}">«</a>
+            </li>
+          {% endif %}
+
+          <li class="page-item disabled">
+            <span class="page-link">Page {{ current_page }} of {{ total_pages }}</span>
+          </li>
+
+          {% if not is_finished %}
+            <li class="page-item">
+              <a class="page-link" href="?keyword={{ keyword }}&page={{ current_page|add:1 }}">»</a>
+            </li>
+            <li class="page-item">
+              <a class="page-link" href="?keyword={{ keyword }}&page={{ total_pages }}">»»</a>
+            </li>
+          {% endif %}
+        </ul>
+      </nav>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

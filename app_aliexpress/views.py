@@ -1,11 +1,15 @@
 """Module providing a function python version."""
+import base64
 from functools import wraps
 import hashlib
 import hmac
+from io import BytesIO
 import time
 import json
 import logging
 from urllib.parse import quote, unquote
+from pillow_avif import AvifImagePlugin
+from PIL import Image  # Importe o plugin pillow-avif-plugin
 import iop
 import requests
 from django.http import HttpResponseRedirect
@@ -40,6 +44,63 @@ def process_product_description(html_content):
         img["style"] = "max-width: 100%; height: auto; display: block; margin: 10px 0;"
     return str(soup)
 
+
+def reduce_image_size(image_file, max_size_kb=70, max_dimension=600):
+    """
+    Reduz o tamanho da imagem, converte para JPG e codifica em base64.
+    """
+    image = Image.open(image_file)
+    output = BytesIO()
+
+    valid_extensions = ['png', 'webp', 'jpg', 'jpeg', 'avif']
+    file_extension = image.format.lower()
+    if file_extension not in valid_extensions:
+        raise ValueError(f"Formato de imagem inválido: {file_extension}")
+
+    # Converte a imagem para RGB se necessário
+    if file_extension not in ('jpeg', 'jpg', 'avif'):
+        image = image.convert("RGB")
+
+    # Redimensiona a imagem se necessário
+    width, height = image.size
+    if width > max_dimension or height > max_dimension:
+        scaling_factor = min(max_dimension / width, max_dimension / height)
+        new_width = int(width * scaling_factor)
+        new_height = int(height * scaling_factor)
+        image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+    # Salva inicialmente para verificar o tamanho
+    image.save(output, format='JPEG')
+    initial_size_kb = output.tell() / 1024
+
+    if initial_size_kb <= max_size_kb:
+        output.seek(0)
+        encoded_image = base64.b64encode(output.getvalue()).decode('utf-8')
+        return encoded_image
+
+    # Ajusta a qualidade para reduzir o tamanho do arquivo
+    for quality in range(90, 10, -5):
+        output.seek(0)
+        output.truncate()
+        image.save(output, format='JPEG', quality=quality)
+        if output.tell() / 1024 <= max_size_kb:
+            output.seek(0)
+            encoded_image = base64.b64encode(output.getvalue()).decode('utf-8')
+            return encoded_image
+
+    # Redimensiona ainda mais se a redução de qualidade não for suficiente
+    while output.tell() / 1024 > max_size_kb:
+        width, height = image.size
+        new_width = int(width * 0.9)
+        new_height = int(height * 0.9)
+        image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        output.seek(0)
+        output.truncate()
+        image.save(output, format='JPEG', quality=quality)
+
+    output.seek(0)
+    encoded_image = base64.b64encode(output.getvalue()).decode('utf-8')
+    return encoded_image
 
 def generate_sign(secret, api_name, parameters):
     """Generate sign for Aliexpress API."""
@@ -522,4 +583,125 @@ def shipping_aliexpress(access_token, product_id, sku_id):
                 "/aliexpress/dashboard/",
                 {"error": "Internal error processing request."}
         )
+
+
+def text_search_aliexpress(request):
+    """Search products by text using AliExpress TOP API.
+
+    Args:
+        request: HTTP request object
+
+    Returns:
+        Rendered template with search results or error message
+    """
+
+    keyword = request.GET.get('keyword', '')
+    page_index = request.GET.get('page', '1')
+    page_size = '20'  # Default page size
+    current_page = int(request.GET.get('page', 1))
+
+
+    try:
+        # Initialize TOP client
+        client = iop.IopClient(APP_URL_SYNC, APP_KEY, APP_SECRET)
+        # Create and configure request
+        request_api = iop.IopRequest('aliexpress.ds.text.search')
+        request_api.add_api_param('keyWord', keyword)
+        request_api.add_api_param('local', 'zh_CN')
+        request_api.add_api_param('countryCode', 'US')
+        request_api.add_api_param('sortBy', 'min_price')
+        request_api.add_api_param('pageSize', page_size)
+        request_api.add_api_param('pageIndex', page_index)
+        request_api.add_api_param('currency', 'USD')
+        request_api.add_api_param('timestamp', str(int(time.time() * 1000)))
+
+        # Execute request
+        response = client.execute(request_api, request.session["aliexpress_access_token"])
+
+        if response.body.get('aliexpress_ds_text_search_response', {}).get('data', {}) \
+            .get('products', {}) is None:  # Adjust based on actual success indicator
+            error_message = response.body.get('error_message', 'Unknown API Error')
+            logger.error("API error: %s", error_message)
+            return render(
+                request,
+                "app_aliexpress/aliexpress_text_search.html",
+                {"error": error_message}
+            )
+
+        # Process response
+        result = response.body.get('aliexpress_ds_text_search_response', {}).get('data', {})
+        products = result.get('products', {}).get('selection_search_product', [])
+        total_count = result.get('totalCount', 0)  # Adjust based on actual field name
+        total_pages = (int(total_count) + int(page_size) - 1) // int(page_size)
+        is_finished = current_page >= total_pages
+
+
+        context = {
+            'products': products,
+            'keyword': keyword,
+            'current_page': current_page,
+            'total_pages': total_pages,
+            'is_finished': is_finished,
+            'total_results': total_count,
+        }
+
+        return render(request, "app_aliexpress/aliexpress_text_search.html", context)
+    except ValueError as ve:  # More specific exception
+        logger.exception("ValueError during token refresh: %s", ve)
+        return redirect(
+                "/aliexpress/dashboard/",
+                {"error": "Internal error processing request."}
+        )
+
+
+
+@token_required
+def aliexpress_image_search(request):
+    """View to perform Aliexpress image search."""
+
+    # Get image_base64 from the request (you'll need to handle how this is sent)
+    if request.method == "POST" and 'image_file' in request.FILES:
+        image_file = request.FILES['image_file']
+        if not image_file:
+            return render(request, "app_aliexpress/aliexpress_image_search.html", \
+                {"error": "Please provide an image."})
+
+        try:
+            # Reduce the image size
+            reduced_image = reduce_image_size(image_file)
+            client = iop.IopClient(APP_URL_SYNC, APP_KEY, APP_SECRET)
+            request_api = iop.IopRequest('aliexpress.ds.image.searchV2')
+
+            # Construct the param0 JSON
+            params = {
+                "sort_type": "price",
+                "image_base64": reduced_image,
+                "lang": "en",
+                "sort_order": "asc",
+                "ship_to": "BR"
+            }
+            request_api.add_api_param('param0', json.dumps(params))  # Convert to JSON string
+
+            access_token = request.session.get("aliexpress_access_token")
+            response = client.execute(request_api, access_token)
+            if response.body.get("aliexpress_ds_image_searchV2_response", {}) \
+                .get("result", {}).get("data", {}).get("data", []):
+                context = {
+                    "products": response.body.get("aliexpress_ds_image_searchV2_response", {}) \
+                    .get("result", {}).get("data", {}).get("data", [])
+                }
+                return render(request, "app_aliexpress/aliexpress_image_search.html", \
+                    context)
+            else:
+                return render(request, "app_aliexpress/aliexpress_image_search.html", \
+                    {"error": "Image search none."})
+
+        except ValueError as ve:  # More specific exception
+            logger.exception("ValueError during token refresh: %s", ve)
+            return redirect(
+                    "/aliexpress/dashboard/",
+                    {"error": "Internal error processing request."}
+            )
+    else:
+        return render(request, "app_aliexpress/aliexpress_image_search.html", {"results": ""})
         

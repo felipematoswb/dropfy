@@ -1,3 +1,5 @@
+""" added url shopify"""
+
 from django.urls import path
 from . import views
 

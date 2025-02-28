@@ -24,8 +24,7 @@
         <tbody>
           {% for product in products %}
           <tr>
-            <td><img src="{{ product.product_main_image_url }}" alt="{{ product.product_title }}"
-                style="width: 80px; height: 80px" /></td>
+            <td><img src="{{ product.product_main_image_url }}" alt="{{ product.product_title }}" width="80" height="80"></td>
             <td>{{ product.product_title|truncatechars:80 }}</td>
             <td>{{ product.first_level_category_name }}<br />-{{ product.second_level_category_name }}</td>
             <td>{{ product.target_sale_price_currency }} {{ product.sale_price }}</td>

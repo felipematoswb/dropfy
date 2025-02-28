@@ -23,4 +23,14 @@ urlpatterns = [
         views.product_detail_aliexpress,
         name="product_detail_aliexpress",
     ),
+    path(
+        "text_search/",
+        views.text_search_aliexpress,
+        name="text_search_aliexpress",
+    ),
+    path(
+        "image_search/",
+        views.aliexpress_image_search,
+        name="aliexpress_image_search",
+    ),
 ]

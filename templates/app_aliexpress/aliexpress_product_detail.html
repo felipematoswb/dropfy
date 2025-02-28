@@ -29,7 +29,7 @@
           <div class="carousel-inner">
             {% for image_url in product.image_urls %}
             <div class="carousel-item {% if forloop.first %}active{% endif %}">
-              <img src="{{ image_url }}" class="d-block w-100 img-fluid" alt="Imagem do Produto">
+              <img src="{{ image_url }}" class="d-block w-100 img-fluid" alt="Imagem do Produto", height="100" width="100">
             </div>
             {% endfor %}
           </div>
@@ -49,8 +49,7 @@
           <div class="col-3 mb-3">
             <div class="card" style="cursor: pointer;" data-bs-target="#productCarousel"
               data-bs-slide-to="{{ forloop.counter0 }}">
-              <img src="{{ image_url }}" class="card-img-top" alt="Imagem do Produto"
-                style="height: 100px; object-fit: cover;">
+              <img src="{{ image_url }}" class="card-img-top" alt="Imagem do Produto", height="100" width="100">
             </div>
           </div>
           {% endfor %}
@@ -158,9 +157,9 @@
               {% for sku in product.ae_item_sku_info_dtos.ae_item_sku_info_d_t_o %}
               <tr>
                 <td>
-                  {% for prop in sku.ae_sku_property_dtos.ae_sku_property_d_t_o %}
-                  <img src="{{ prop.sku_image }}" class="img-thumbnail" style="width: 60px; height: 60px" />
-                  {% endfor %}
+                  {% if sku.ae_sku_property_dtos.ae_sku_property_d_t_o %}
+                    <img src="{{ sku.ae_sku_property_dtos.ae_sku_property_d_t_o.0.sku_image }}" class="img-thumbnail" height="100" width="100" alt="image">
+                  {% endif %}
                 </td>
                 <td>
                   {% for prop in sku.ae_sku_property_dtos.ae_sku_property_d_t_o %}

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="jumbotron jumbotron-fluid bg-light">
+    <div class="container">
+        <h1 class="display-4">Buscar Produto por Imagem</h1>
+        <p class="lead">
+            Envie uma imagem para encontrar produtos similares.
+        </p>
+        <hr class="my-4" />
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="mb-4">
+                <label for="image_file" class="form-label">Enviar Imagem:</label>
+                <div class="d-flex align-items-center">
+                    <input type="file"
+                           id="image_file"
+                           name="image_file"
+                           class="form-control"
+                           required>
+                    <button type="submit"
+                            class="btn btn-primary ms-2">
+                        Buscar
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="container">
+    {% if products %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Imagem</th>
+                        <th>Produto</th>
+                        <th>Preço</th>
+                        <th>Desconto</th>
+                        <th>Categoria</th>
+                        <th>Detalhes</th>
+                        <th>Aliexpress</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in products %}
+                        <tr>
+                            <td><img src="{{ product.product_main_image_url }}" alt="{{ product.product_title }}" width="80" height="80"></td>
+                            <td>{{ product.product_title|truncatechars:80 }}</td>
+                            <td>{{ product.target_sale_price }} {{ product.target_original_price_currency }}</td>
+                            <td>{{ product.discount }}</td>
+                            <td>{{ product.first_level_category_title }}</td>
+                            <td>
+                                <a href="{% url 'product_detail_aliexpress' product.product_id %}"
+                                   class="btn btn-success btn-sm" target="_blank">Detalhes</a>
+                            </td>
+                            <td>
+                                <a href="{{ product.product_detail_url }}"
+                                   class="btn btn-danger btn-sm" target="_blank">Aliexpress</a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="text-center">Nenhum produto encontrado.</p>
+    {% endif %}
+</div>
+{% endblock %}
