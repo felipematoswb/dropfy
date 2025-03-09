@@ -8,7 +8,7 @@ import time
 import json
 import logging
 from urllib.parse import quote, unquote
-from pillow_avif import AvifImagePlugin
+from pillow_avif import AvifImagePlugin # pylint: disable=W0611
 from PIL import Image  # Importe o plugin pillow-avif-plugin
 import iop
 import requests
@@ -19,9 +19,7 @@ from django.core.paginator import EmptyPage, Paginator, PageNotAnInteger
 from bs4 import BeautifulSoup
 from decouple import config
 
-
 logger = logging.getLogger(__name__)
-
 
 APP_KEY = config("ALIEXPRESS_APP_KEY")
 APP_SECRET = config("ALIEXPRESS_APP_SECRET")
@@ -31,7 +29,6 @@ APP_URL_SYNC = "https://api-sg.aliexpress.com/sync"
 ALIEXPRESS_TARGET_CURRENCY = "BRL"
 ALIEXPRESS_SHIP_COUNTRY = "BR"
 ALIEXPRESS_LOCALE = "pt_BR"
-
 
 def process_product_description(html_content):
     """parser html aliexpress to app"""
@@ -43,7 +40,6 @@ def process_product_description(html_content):
             del img["height"]
         img["style"] = "max-width: 100%; height: auto; display: block; margin: 10px 0;"
     return str(soup)
-
 
 def reduce_image_size(image_file, max_size_kb=70, max_dimension=600):
     """
@@ -127,7 +123,6 @@ def generate_sign(secret, api_name, parameters):
     )
     return h.hexdigest().upper()
 
-
 def token_required(view_func):
     """
     Decorator to check and refresh the access token.
@@ -168,7 +163,6 @@ def token_required(view_func):
 
     return _wrapped_view
 
-
 def authorization_aliexpress(request):
     """ token verification """
     # Verifica se o token de acesso está presente e válido
@@ -177,8 +171,6 @@ def authorization_aliexpress(request):
     return redirect(
         f"https://api-sg.aliexpress.com/oauth/authorize?response_type=code \
             &force_auth=true&redirect_uri={redirect_uri}&client_id={APP_KEY}")
-
-
 
 def callback_aliexpress(request):
     """Callback function using the iop library."""
@@ -227,8 +219,6 @@ def callback_aliexpress(request):
             {"error": "Error processing API response."},
         )
 
-
-
 def refresh_aliexpress_token(request):
     """Refreshes the Aliexpress access token using the refresh token."""
 
@@ -236,7 +226,6 @@ def refresh_aliexpress_token(request):
     if not refresh_token:
         logger.error("No refresh token found in session.")
         return redirect("/aliexpress/authorization/", {"error": "No refresh token available."})
-
 
     client = iop.IopClient(APP_URL_REST, APP_KEY, APP_SECRET)
     request_iop = iop.IopRequest('/auth/token/refresh')
@@ -286,87 +275,97 @@ def dashboard_aliexpress(request):
     """dashboard aliexpress"""
     return render(request, "app_aliexpress/aliexpress_dashboard.html")
 
-
-def product_detail_aliexpress(request, product_id):
-    """product detail aliexpress"""
+def fetch_aliexpress_product_detail(access_token, product_id):
+    """Fetches product details from AliExpress API."""
     method = "aliexpress.ds.product.get"
     url_full = APP_URL_SYNC + method
 
-    # Parâmetros da requisição
     params = {
         "app_key": APP_KEY,
-        "timestamp": str(int(time.time() * 1000)),  # Timestamp em milissegundos
+        "timestamp": str(int(time.time() * 1000)),
         "sign_method": "sha256",
         "method": method,
         "product_id": product_id,
         "target_currency": ALIEXPRESS_TARGET_CURRENCY,
         "ship_to_country": ALIEXPRESS_SHIP_COUNTRY,
-        "access_token": request.session["aliexpress_access_token"],
+        "access_token": access_token,
     }
 
-    # Gera o sign dinamicamente
     params["sign"] = generate_sign(APP_SECRET, method, params)
 
-    # Cabeçalhos da requisição
     headers = {"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"}
 
     try:
-        response = requests.post(
-            url_full,
-            data=params,
-            headers=headers,
-            timeout=10,
-        )
+        response = requests.post(url_full, data=params, headers=headers, timeout=10)
         response.raise_for_status()
-
-        # Decodificando a resposta JSON
         response_data = response.json()
-
-        # Verifica se a resposta contém os dados esperados
         result = response_data.get("aliexpress_ds_product_get_response", {})
         if result:
             product = result.get("result", {})
+            if not product:
+                return None, "Product data not found in API response."
         else:
-            logger.error("Resposta da API inválida ou sem dados.")
-            return render(
-                request,
-                "app_aliexpress/aliexpress_product_detail.html",
-                {"error": "Erro ao obter dados da API."},
-            )
+            return None, "Invalid or missing data in API response."
 
-    except requests.exceptions.RequestException:
-        return render(
-            request,
-            "app_aliexpress/aliexpress_product_detail.html",
-            {"error": "Erro interno ao processar a requisição."},
-        )
-    # Processar as URLs das imagens
-    if (
-        "ae_multimedia_info_dto" in product
-        and "image_urls" in product["ae_multimedia_info_dto"]
-    ):
-        product["image_urls"] = product["ae_multimedia_info_dto"]["image_urls"].split(
-            ";"
-        )
+    except ValueError as ve:  # More specific exception
+        logger.exception("ValueError during token refresh: %s", ve)
+        return None, "Internal error processing the request."
+
+    # Process image URLs
+    if "ae_multimedia_info_dto" in product and "image_urls" in product["ae_multimedia_info_dto"]:
+        product["image_urls"] = product["ae_multimedia_info_dto"]["image_urls"].split(";")
     else:
         product["image_urls"] = []
 
-    # Processe a descrição do produto
-    processed_description = process_product_description(
-        product["ae_item_base_info_dto"]["detail"]
-    )
-    product["ae_item_base_info_dto"]["detail"] = processed_description
+    # Process product description
+    if 'ae_item_base_info_dto' in product and 'detail' in product['ae_item_base_info_dto']:
+        product["ae_item_base_info_dto"]["detail"] = process_product_description(
+            product["ae_item_base_info_dto"]["detail"]
+        )
+    else:
+        return None, "Product base info or description not found."
 
-    # processe o frete do produto
-    freights = shipping_aliexpress(
-        request.session["aliexpress_access_token"],
-        product_id,
-        sku_id=product["ae_item_sku_info_dtos"]["ae_item_sku_info_d_t_o"][0]["sku_id"],
-    )
+    # Process freight
+    if "ae_item_sku_info_dtos" in product and "ae_item_sku_info_d_t_o" \
+        in product["ae_item_sku_info_dtos"] and \
+            product["ae_item_sku_info_dtos"]["ae_item_sku_info_d_t_o"]:
+        sku_id = product["ae_item_sku_info_dtos"]["ae_item_sku_info_d_t_o"][0]["sku_id"]
+        freights = shipping_aliexpress(access_token, product_id, sku_id=sku_id)
+    else:
+        freights = [] #Or return None, "SKU data not found." if it's critical.
+
+    return product, freights
+
+@token_required
+def product_detail_aliexpress(request, product_id):
+    """_summary_
+
+    Args:
+        request (_type_): _description_
+        product_id (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    access_token = request.session.get("aliexpress_access_token")
+    if not access_token:
+        return render(request, "app_aliexpress/aliexpress_product_detail.html", \
+            {"error": "Access token missing."})
+
+    product, freights_or_error = fetch_aliexpress_product_detail(access_token, product_id)
+
+    if isinstance(freights_or_error,str):
+        return render(request, "app_aliexpress/aliexpress_product_detail.html", \
+            {"error": freights_or_error})
+
+    if product is None:
+        return render(request, "app_aliexpress/aliexpress_product_detail.html", \
+                      {"error": "Failed to retrieve product details."})
+
     return render(
         request,
         "app_aliexpress/aliexpress_product_detail.html",
-        {"product": product, "freights": freights, "product_id": product_id},
+        {"product": product, "freights": freights_or_error, "product_id": product_id},
     )
 
 @token_required
@@ -410,7 +409,6 @@ def feedname_aliexpress(request):
                 logger.error("API request failed: %s", response.body)
                 context["error"] = "API request failed"
 
-
         except ValueError as ve:  # More specific exception
             logger.exception("ValueError during token refresh: %s", ve)
             return redirect(
@@ -435,7 +433,6 @@ def feedname_aliexpress(request):
     context["page_obj"] = page_obj
 
     return render(request, "app_aliexpress/aliexpress_feedname.html", context)
-
 
 def recommend_feed_aliexpress(request, feed_name):
     """Recommend feed from AliExpress using TOP API.
@@ -526,7 +523,6 @@ def recommend_feed_aliexpress(request, feed_name):
                 {"error": "Internal error processing request."}
         )
 
-
 def shipping_aliexpress(access_token, product_id, sku_id):
     """Calculate shipping for a product using AliExpress TOP API.
 
@@ -584,7 +580,6 @@ def shipping_aliexpress(access_token, product_id, sku_id):
                 {"error": "Internal error processing request."}
         )
 
-
 def text_search_aliexpress(request):
     """Search products by text using AliExpress TOP API.
 
@@ -599,7 +594,6 @@ def text_search_aliexpress(request):
     page_index = request.GET.get('page', '1')
     page_size = '20'  # Default page size
     current_page = int(request.GET.get('page', 1))
-
 
     try:
         # Initialize TOP client
@@ -635,7 +629,6 @@ def text_search_aliexpress(request):
         total_pages = (int(total_count) + int(page_size) - 1) // int(page_size)
         is_finished = current_page >= total_pages
 
-
         context = {
             'products': products,
             'keyword': keyword,
@@ -652,8 +645,6 @@ def text_search_aliexpress(request):
                 "/aliexpress/dashboard/",
                 {"error": "Internal error processing request."}
         )
-
-
 
 @token_required
 def aliexpress_image_search(request):

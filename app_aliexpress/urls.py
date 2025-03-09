@@ -3,7 +3,6 @@ from django.urls import path
 
 from . import views
 
-
 urlpatterns = [
     path(
         "authorization/",
@@ -18,11 +17,8 @@ urlpatterns = [
         views.recommend_feed_aliexpress,
         name="recommend_feed_aliexpress",
     ),
-    path(
-        "product/<int:product_id>/",
-        views.product_detail_aliexpress,
-        name="product_detail_aliexpress",
-    ),
+    path("product/<int:product_id>/", views.product_detail_aliexpress, \
+        name="product_detail_aliexpress"),
     path(
         "text_search/",
         views.text_search_aliexpress,
