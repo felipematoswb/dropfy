@@ -1,196 +1,218 @@
-{% extends "base.html" %} {% block content %}
+{% extends "base.html" %} 
+{% block content %}
 <div class="container mt-5">
-	<h2>Criar Produto</h2>
-	<form method="post" enctype="multipart/form-data">
-		{% csrf_token %}
-		<div class="input-group">
-			<button class="btn btn-dark" type="submit">Send To Store</button>
-		</div>
-		<div class="mb-3">
-			<label for="title" class="form-label">Título</label>
-			<input
-				type="text"
-				class="form-control"
-				id="title"
-				name="title"
-				value="{{ product.ae_item_base_info_dto.subject }}"
-				required
-			/>
-		</div>
+    <h2>Criar Produto</h2>
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="input-group mb-3">
+            <button class="btn btn-dark" type="submit">Send To Store</button>
+        </div>
 
-		<div class="mb-3">
-			<label for="description" class="form-label">Descrição</label>
-			<div
-				contenteditable="true"
-				class="form-control"
-				id="description"
-				style="min-height: 100px"
-				data-placeholder="Digite a descrição aqui..."
-			>
-				{{ product.ae_item_base_info_dto.detail|safe }}
-			</div>
-			<input
-				type="hidden"
-				id="description_hidden"
-				name="description"
-				value="{{ product.ae_item_base_info_dto.detail|escape }}"
-			/>
-		</div>
+        <!-- Tabs -->
+        <ul class="nav nav-tabs" id="productTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="basic-tab" data-bs-toggle="tab" data-bs-target="#basic" type="button" role="tab">Informações Básicas</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="images-tab" data-bs-toggle="tab" data-bs-target="#images" type="button" role="tab">Imagens</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="variants-tab" data-bs-toggle="tab" data-bs-target="#variants" type="button" role="tab">Variações</button>
+            </li>
+        </ul>
 
-		<div class="mb-3">
-			<label for="images" class="form-label">Imagens (Múltiplas)</label>
-			<input
-				type="file"
-				class="form-control"
-				id="images"
-				name="images"
-				multiple
-			/>
-		</div>
+        <div class="tab-content" id="productTabsContent">
+            <!-- Tab Informações Básicas -->
+            <div class="tab-pane fade show active" id="basic" role="tabpanel">
+                <div class="mt-3">
+                    <div class="mb-3">
+                        <label for="title" class="form-label">Título</label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="title"
+                            name="title"
+                            value="{{ product.ae_item_base_info_dto.subject }}"
+                            required
+                        />
+                    </div>
 
-		<div class="mb-3">
-			<label class="form-label">Imagens Existentes</label>
-			<div class="row" id="image-list">
-				{% for image_url in product.image_urls %}
-				<div class="col-3 mb-3 position-relative">
-					<img
-						src="{{ image_url }}"
-						class="img-thumbnail"
-						style="width: 400px; height: 400px"
-					/>
-					<button
-						type="button"
-						class="btn btn-danger btn-sm position-absolute top-0 end-0 delete-image"
-						data-image-url="{{ image_url }}"
-					>
-						X
-					</button>
-					<input type="hidden" name="image_urls" value="{{ image_url }}" />
-				</div>
-				{% endfor %}
-			</div>
-		</div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Descrição</label>
+                        <div
+                            contenteditable="true"
+                            class="form-control"
+                            id="description"
+                            style="max-height: 100px; overflow-y: auto; resize: none;"
+                            data-placeholder="Digite a descrição aqui..."
+                        >
+                            {{ product.ae_item_base_info_dto.detail|safe }}
+                        </div>
+                        <input
+                            type="hidden"
+                            id="description_hidden"
+                            name="description"
+                            value="{{ product.ae_item_base_info_dto.detail|escape }}"
+                        />
+                    </div>
 
-		<div class="mb-3">
-			<label class="form-label">Variantes</label>
-			<div id="variants-list">
-				{% for sku in product.ae_item_sku_info_dtos.ae_item_sku_info_d_t_o %}
-				<div
-					class="variant-row mb-2 p-3 border rounded"
-					data-index="{{ forloop.counter0 }}"
-				>
-					<div class="row">
-						<div class="col-md-3">
-							<label class="form-label">Opção</label>
-							<input
-								type="text"
-								class="form-control variant-option"
-								value="{% for prop in sku.ae_sku_property_dtos.ae_sku_property_d_t_o %}{{ prop.property_value_definition_name }}{% endfor %}"
-								placeholder="Ex: Tamanho"
-							/>
-						</div>
-						<div class="col-md-3">
-							<label class="form-label">Valor</label>
-							<input
-								type="text"
-								class="form-control variant-value"
-								value="{% for prop in sku.ae_sku_property_dtos.ae_sku_property_d_t_o %}{{ prop.sku_property_value }}{% endfor %}"
-								placeholder="Ex: P"
-							/>
-						</div>
-						<div class="col-md-2">
-							<label class="form-label">Custo</label>
-							<input
-								disabled
-								type="number"
-								class="form-control variant-price"
-								value="{{ sku.offer_sale_price }}"
-								placeholder="10.00"
-								readonly
-							/>
-						</div>
-						<div class="col-md-2">
-							<label class="form-label">Preço Comum * 4 ou 5</label>
-							<input
-								type="number"
-								class="form-control variant-price"
-								placeholder="0.00"
-								required
-							/>
-						</div>
-						<div class="col-md-2">
-							<label class="form-label">Preço Oferta * 3</label>
-							<input
-								type="number"
-								class="form-control variant-price"
-								placeholder="0.00"
-							/>
-						</div>
-						<div class="col-md-2">
-							<label class="form-label">Quantidade</label>
-							<input
-								disabled
-								type="number"
-								class="form-control variant-quantity"
-								value="{{ sku.sku_available_stock }}"
-								placeholder=""
-								readonly
-							/>
-						</div>
-						<div class="col-md-2">
-							<label class="form-label">SKU</label>
-							<input
-								disabled
-								type="text"
-								class="form-control variant-sku"
-								value="{{ sku.sku_code }}"
-								placeholder="SKU-P"
-								readonly
-							/>
-							<button
-								type="button"
-								class="btn btn-danger btn-sm mt-2 delete-variant"
-							>
-								Excluir
-							</button>
-						</div>
-					</div>
-				</div>
-				{% endfor %}
-			</div>
-			<button type="button" class="btn btn-success mt-2" id="add-variant">
-				Adicionar Variante
-			</button>
-			<!-- Hidden textarea to store JSON data -->
-			<textarea class="d-none" id="variants" name="variants"></textarea>
-		</div>
+                    <div class="mb-3">
+                        <label for="tags" class="form-label">Tags (Separadas por Vírgula)</label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="tags"
+                            name="tags"
+                            value="tag1, tag2, tag3"
+                        />
+                        <small class="form-text text-muted">Insira até 10 tags, separadas por vírgulas.</small>
+                    </div>
+                </div>
+            </div>
 
-		<div class="mb-3">
-			<label for="tags" class="form-label">Tags (Separadas por Vírgula)</label>
-			<input
-				type="text"
-				class="form-control"
-				id="tags"
-				name="tags"
-				value="tag1, tag2, tag3"
-			/>
-			<small class="form-text text-muted"
-				>Insira até 10 tags, separadas por vírgulas.</small
-			>
-		</div>
-		<br />
-		<br />
-		<button type="submit" class="btn btn-primary">Enviar</button>
-	</form>
+            <!-- Tab Imagens -->
+            <div class="tab-pane fade" id="images" role="tabpanel">
+                <div class="mt-3">
+                    <div class="mb-3">
+                        <label for="images" class="form-label">Imagens (Múltiplas)</label>
+                        <input
+                            type="file"
+                            class="form-control"
+                            id="images"
+                            name="images"
+                            multiple
+                        />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Imagens Existentes</label>
+                        <div class="row" id="image-list">
+                            {% for image_url in product.image_urls %}
+                            <div class="col-3 mb-3 position-relative">
+                                <img
+                                    src="{{ image_url }}"
+                                    class="img-thumbnail"
+                                    style="width: 400px; height: 400px"
+                                />
+                                <button
+                                    type="button"
+                                    class="btn btn-danger btn-sm position-absolute top-0 end-0 delete-image"
+                                    data-image-url="{{ image_url }}"
+                                >
+                                    X
+                                </button>
+                                <input type="hidden" name="image_urls" value="{{ image_url }}" />
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Variações -->
+            <div class="tab-pane fade" id="variants" role="tabpanel">
+                <div class="mt-3">
+                    <div class="mb-3">
+                        <label class="form-label">Variantes</label>
+                        <div id="variants-list">
+                            {% for sku in product.ae_item_sku_info_dtos.ae_item_sku_info_d_t_o %}
+                            <div class="variant-row mb-2 p-3 border rounded" data-index="{{ forloop.counter0 }}">
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <label class="form-label">Opção</label>
+                                        <input
+                                            type="text"
+                                            class="form-control variant-option"
+                                            value="{% for prop in sku.ae_sku_property_dtos.ae_sku_property_d_t_o %}{{ prop.property_value_definition_name }}{% endfor %}"
+                                            placeholder="Ex: Tamanho"
+                                        />
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Valor</label>
+                                        <input
+                                            type="text"
+                                            class="form-control variant-value"
+                                            value="{% for prop in sku.ae_sku_property_dtos.ae_sku_property_d_t_o %}{{ prop.sku_property_value }}{% endfor %}"
+                                            placeholder="Ex: P"
+                                        />
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Custo</label>
+                                        <input
+                                            disabled
+                                            type="number"
+                                            class="form-control variant-price"
+                                            value="{{ sku.offer_sale_price }}"
+                                            placeholder="10.00"
+                                            readonly
+                                        />
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Preço Comum * 4 ou 5</label>
+                                        <input
+                                            type="number"
+                                            class="form-control variant-price"
+                                            placeholder="0.00"
+                                            required
+                                        />
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Preço Oferta * 3</label>
+                                        <input
+                                            type="number"
+                                            class="form-control variant-price"
+                                            placeholder="0.00"
+                                        />
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Quantidade</label>
+                                        <input
+                                            disabled
+                                            type="number"
+                                            class="form-control variant-quantity"
+                                            value="{{ sku.sku_available_stock }}"
+                                            placeholder=""
+                                            readonly
+                                        />
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">SKU</label>
+                                        <input
+                                            disabled
+                                            type="text"
+                                            class="form-control variant-sku"
+                                            value="{{ sku.sku_code }}"
+                                            placeholder="SKU-P"
+                                            readonly
+                                        />
+                                        <button type="button" class="btn btn-danger btn-sm mt-2 delete-variant">
+                                            Excluir
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <button type="button" class="btn btn-success mt-2" id="add-variant">
+                            Adicionar Variante
+                        </button>
+                        <textarea class="d-none" id="variants" name="variants"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary mt-3">Enviar</button>
+    </form>
 </div>
 
 <script>
 	// Sincronizar o contenteditable com o input oculto
 	const descriptionDiv = document.getElementById("description");
-	const descriptionHidden = document.getElementById("description_hidden");
-	descriptionDiv.addEventListener("input", function () {
-		descriptionHidden.value = descriptionDiv.innerHTML;
-	});
+    const descriptionHidden = document.getElementById("description_hidden");
+    descriptionDiv.addEventListener("input", function () {
+        descriptionHidden.value = descriptionDiv.innerHTML;
+    });
 	descriptionDiv.addEventListener("focus", function () {
 		if (this.innerHTML.trim() === "" || this.innerHTML === "<br>")
 			this.innerHTML = "";
@@ -336,7 +358,8 @@
 		border-radius: 4px;
 		padding: 8px;
 		background-color: #fff;
-		min-height: 100px;
+		min-height: 400px;
+		overflow-y: auto;
 	}
 	#description:empty:before {
 		content: attr(data-placeholder);
